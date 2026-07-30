@@ -1,5 +1,7 @@
+using System.Net;
 using MaintOrbit.Api.Configuration;
 using MaintOrbit.Shared.Constants;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 
 namespace MaintOrbit.Api.Extensions;
@@ -40,8 +42,53 @@ public static class ConfigurationServiceCollectionExtensions
         Register<ApiOptions, ApiOptionsValidator>(services, configuration, ApiOptions.SectionName);
         Register<CorsOptions, CorsOptionsValidator>(services, configuration, CorsOptions.SectionName);
         Register<HealthCheckOptions, HealthCheckOptionsValidator>(services, configuration, HealthCheckOptions.SectionName);
+        Register<ReverseProxyOptions, ReverseProxyOptionsValidator>(services, configuration, ReverseProxyOptions.SectionName);
+
+        AddForwardedHeaders(services);
 
         return services;
+    }
+
+    /// <summary>
+    /// Translates <see cref="ReverseProxyOptions"/> into the framework's forwarded headers
+    /// settings.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>X-Forwarded-For</c> and <c>X-Forwarded-Proto</c> are processed. <c>
+    /// X-Forwarded-Host</c> is deliberately excluded: it rewrites the host the application
+    /// believes it is serving, and the one place that would matter — generating absolute URLs
+    /// a customer will follow — already reads <see cref="ApplicationOptions.PublicBaseUrl"/>
+    /// for exactly that reason.
+    /// <para>
+    /// The framework's default trust list (loopback) is cleared and replaced. Leaving the
+    /// defaults in place alongside a configured proxy would silently widen trust beyond what
+    /// the configuration names.
+    /// </para>
+    /// </remarks>
+    private static void AddForwardedHeaders(IServiceCollection services)
+    {
+        services.AddOptions<ForwardedHeadersOptions>()
+            .Configure<IOptions<ReverseProxyOptions>>(static (forwarded, reverseProxy) =>
+            {
+                var options = reverseProxy.Value;
+
+                forwarded.ForwardedHeaders =
+                    ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+                forwarded.ForwardLimit = options.ForwardLimit;
+
+                forwarded.KnownProxies.Clear();
+                forwarded.KnownIPNetworks.Clear();
+
+                foreach (var proxy in options.KnownProxies)
+                {
+                    forwarded.KnownProxies.Add(IPAddress.Parse(proxy));
+                }
+
+                foreach (var network in options.KnownNetworks)
+                {
+                    forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+                }
+            });
     }
 
     /// <summary>

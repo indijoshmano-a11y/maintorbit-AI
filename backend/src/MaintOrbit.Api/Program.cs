@@ -5,8 +5,8 @@ using MaintOrbit.Infrastructure.DependencyInjection;
 
 // Composition root for the MaintOrbit AI API host.
 //
-// Milestone 10.4 adds logging, correlation, and health endpoints. Middleware, authentication,
-// business endpoints, and module registration are added in later milestones — see
+// Milestone 10.5 adds the request pipeline. Authentication, business endpoints, and module
+// registration are added in later milestones — see
 // docs/02-architecture/backend-architecture-overview.md.
 //
 // This file stays minimal by design: each layer owns its registration, so the composition
@@ -30,6 +30,8 @@ builder.Services
     .AddObservability(builder.Configuration);
 
 var app = builder.Build();
+
+app.UseApiPipeline();
 
 app.MapHealthEndpoints();
 
