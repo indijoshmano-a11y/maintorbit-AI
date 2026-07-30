@@ -1,13 +1,15 @@
 using MaintOrbit.Api.Extensions;
+using MaintOrbit.Application.DependencyInjection;
+using MaintOrbit.Infrastructure.DependencyInjection;
 
 // Composition root for the MaintOrbit AI API host.
 //
-// Milestone 10.2 establishes the configuration foundation. Middleware, endpoints,
+// Milestone 10.3 establishes the dependency injection foundation. Middleware, endpoints,
 // authentication, health checks, and module registration are added in later milestones —
 // see docs/02-architecture/backend-architecture-overview.md.
 //
-// This file stays minimal by design: registration lives in extension methods, so the
-// composition root reads as a sequence of intentions rather than a list of mechanics.
+// This file stays minimal by design: each layer owns its registration, so the composition
+// root reads as a sequence of intentions rather than a list of mechanics.
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +20,12 @@ builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, relo
 // Reject an unrecognised ASPNETCORE_ENVIRONMENT before anything binds to it.
 ConfigurationServiceCollectionExtensions.ValidateEnvironment(builder.Environment);
 
-builder.Services.AddApplicationConfiguration(builder.Configuration);
+builder.Host.UseValidatedServiceProvider();
+
+builder.Services
+    .AddApplication()
+    .AddInfrastructure(builder.Configuration)
+    .AddApi(builder.Configuration);
 
 var app = builder.Build();
 

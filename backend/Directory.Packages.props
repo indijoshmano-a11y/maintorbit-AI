@@ -31,6 +31,19 @@
     Shouldly is chosen over FluentAssertions, whose v8+ requires a commercial licence
     for commercial use (risk TR-11).
   -->
+  <!--
+    Abstractions only. Application and Infrastructure expose registration extensions, so
+    they need IServiceCollection and IConfiguration — but nothing more. Referencing the
+    ASP.NET shared framework instead would pull HTTP concerns into layers that must not
+    know about transport (ADR-0001).
+
+    The Api project needs no entry here: Microsoft.AspNetCore.App already carries these.
+  -->
+  <ItemGroup Label="Extensions">
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
