@@ -47,9 +47,11 @@ vscode-extension/out/
 .env
 .env.*
 !.env.example
-appsettings.Development.json
+# appsettings.Development.json IS committed — shared, non-secret developer defaults.
+# Per-developer overrides and production values are not.
 appsettings.Local.json
 appsettings.Production.json
+appsettings.*.Local.json
 secrets.json
 
 # ------------------------------------------------------------- secrets ----

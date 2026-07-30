@@ -41,6 +41,21 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
 
+  <!--
+    Suppressions. Each requires a recorded reason — docs/08-development/coding-standards.md
+    §20 TD-5. A suppression without a justification is indistinguishable from an oversight.
+
+    CA1716 — "identifier conflicts with a reserved language keyword"
+      Flags MaintOrbit.Shared because 'Shared' is Visual Basic's equivalent of 'static'.
+      The rule guards cross-language interop for library authors. This is an internal
+      solution with no VB or F# consumers, and the project name is fixed by ADR-0001 and
+      the Phase 0 structure — renaming it would change the architecture to satisfy a rule
+      about a scenario that does not exist here.
+  -->
+  <PropertyGroup Label="Suppressions">
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+  </PropertyGroup>
+
   <PropertyGroup Label="Identity">
     <Company>MaintOrbit AI</Company>
     <Product>MaintOrbit AI</Product>
@@ -50,11 +65,19 @@
 
   <!--
     Test projects are not packable and do not need the correctness gates relaxed.
-    Identified by convention: everything under tests/.
+    Identified by convention: everything under tests/. The naming suppression is scoped here deliberately — it must not apply
+    to production code.
+
+    CA1707 — "remove underscores from member name"
+      docs/08-development/testing-strategy.md §4 mandates Method_Scenario_ExpectedResult
+      for test names. The convention makes a failing test readable in CI output without
+      opening the file. The analyzer rule targets public API surface, which a test
+      assembly does not have.
   -->
   <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('tests'))" Label="Tests">
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
 </Project>
