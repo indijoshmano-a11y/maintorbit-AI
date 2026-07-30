@@ -25,8 +25,9 @@ coverage/
 node_modules/
 .next/
 out/
-build/
 dist/
+frontend/build/
+vscode-extension/build/
 .turbo/
 .swc/
 *.tsbuildinfo
