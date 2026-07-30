@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------- .NET ----
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.userosscache
+*.suo
+*.dbmdl
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+BenchmarkDotNet.Artifacts/
+TestResults/
+coverage/
+*.coverage
+*.coverlet.json
+.vs/
+
+# ------------------------------------------------------------ Node / Next ----
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+.swc/
+*.tsbuildinfo
+next-env.d.ts
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+
+# ---------------------------------------------------- VS Code extension ----
+vscode-extension/dist/
+vscode-extension/out/
+*.vsix
+.vscode-test/
+
+# ------------------------------------------------------------------ env ----
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+appsettings.Production.json
+secrets.json
+
+# ------------------------------------------------------------- secrets ----
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+docker/nginx/ssl/*
+!docker/nginx/ssl/.gitkeep
+
+# ------------------------------------------------------------ test/tool ----
+playwright-report/
+test-results/
+.nyc_output/
+coverage-final.json
+
+# --------------------------------------------------------------- logs ----
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------- OS/IDE ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
+*.swo
+*~
+
+# ----------------------------------------------------------- local data ----
+docker/**/data/
+postgres-data/
+redis-data/

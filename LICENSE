@@ -1,0 +1,49 @@
+PROPRIETARY SOFTWARE LICENSE
+
+Copyright (c) 2026 MaintOrbit AI. All rights reserved.
+
+NOTICE: This is a placeholder license selected on the assumption that MaintOrbit
+AI ships as a commercial, closed-source enterprise SaaS product. Replace this
+file with the license your legal counsel approves before the repository is
+shared outside the core team. If the project is instead intended to be open
+source, substitute the full text of the chosen license (e.g. Apache-2.0 or MIT).
+
+-------------------------------------------------------------------------------
+
+This software and its associated source code, documentation, designs, and
+related materials (collectively, the "Software") are the confidential and
+proprietary property of MaintOrbit AI (the "Licensor").
+
+1. GRANT
+   No license, right, or interest in the Software is granted except by a
+   separate written agreement signed by the Licensor.
+
+2. RESTRICTIONS
+   Without the Licensor's prior written consent, no person or entity may:
+   (a) copy, reproduce, or distribute the Software, in whole or in part;
+   (b) modify, adapt, translate, or create derivative works of the Software;
+   (c) reverse engineer, decompile, or disassemble the Software, except to the
+       extent such restriction is prohibited by applicable law;
+   (d) sublicense, sell, rent, lease, or otherwise transfer the Software;
+   (e) remove or alter any proprietary notices contained in the Software.
+
+3. CONFIDENTIALITY
+   The Software constitutes a trade secret of the Licensor. Any party granted
+   access must protect it with no less care than it uses for its own
+   confidential information, and in no event less than reasonable care.
+
+4. THIRD-PARTY COMPONENTS
+   The Software incorporates third-party open source components, each governed
+   by its own license. Those licenses are listed in the dependency manifests and
+   in docs/05-development. Nothing in this file limits rights granted under
+   those licenses.
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+   FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
