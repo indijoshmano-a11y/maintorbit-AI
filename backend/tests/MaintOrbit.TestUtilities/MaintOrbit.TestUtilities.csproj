@@ -5,7 +5,5 @@
     <ProjectReference Include="..\..\src\MaintOrbit.Shared\MaintOrbit.Shared.csproj" />
   </ItemGroup>
 
-  <PropertyGroup>
-  </PropertyGroup>
 
 </Project>

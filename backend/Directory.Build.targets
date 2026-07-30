@@ -1,0 +1,35 @@
+<Project>
+
+  <!--
+    Properties that depend on whether a project is genuinely a test project.
+
+    Why this file exists rather than Directory.Build.props:
+
+      Directory.Build.props is imported BEFORE NuGet package props, so IsTestProject is
+      not yet known there. Directory.Build.targets is imported AFTER, by which point
+      Microsoft.NET.Test.Sdk has set IsTestProject=true on the projects that reference it.
+
+      Keying these off the tests/ directory path instead marks support libraries such as
+      MaintOrbit.TestUtilities as test assemblies. `dotnet test` then attempts to execute
+      them and fails to locate testhost.dll, because a class library has no test host.
+
+    The condition below is therefore a statement of fact — "this project references the
+    test SDK" — rather than an assumption drawn from where the file happens to live.
+  -->
+
+  <!--
+    CA1707 — "remove underscores from member name"
+
+    docs/08-development/testing-strategy.md §4 mandates Method_Scenario_ExpectedResult for
+    test names. The convention makes a failing test readable in CI output without opening
+    the file. The analyzer rule targets public API surface, which a test assembly does not
+    have.
+
+    Scoped to real test projects deliberately. MaintOrbit.TestUtilities is an ordinary
+    library whose members should follow ordinary naming, so it must not inherit this.
+  -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'" Label="TestProjects">
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+</Project>

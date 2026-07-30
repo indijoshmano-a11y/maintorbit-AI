@@ -64,20 +64,17 @@
   </PropertyGroup>
 
   <!--
-    Test projects are not packable and do not need the correctness gates relaxed.
-    Identified by convention: everything under tests/. The naming suppression is scoped here deliberately — it must not apply
-    to production code.
+    Nothing under tests/ is published to a package feed. This is safe to key off the
+    directory path because it is true of test projects and test support libraries alike.
 
-    CA1707 — "remove underscores from member name"
-      docs/08-development/testing-strategy.md §4 mandates Method_Scenario_ExpectedResult
-      for test names. The convention makes a failing test readable in CI output without
-      opening the file. The analyzer rule targets public API surface, which a test
-      assembly does not have.
+    Properties that depend on a project actually BEING a test project are NOT set here.
+    IsTestProject is owned by Microsoft.NET.Test.Sdk, which sets it when the package is
+    referenced. Setting it by directory convention marks support libraries as test
+    assemblies, and `dotnet test` then tries to run them without a test host.
+    See Directory.Build.targets.
   -->
   <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('tests'))" Label="Tests">
     <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
-    <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
 </Project>
