@@ -1,0 +1,60 @@
+<Project>
+
+  <!--
+    Shared build properties for every project in the MaintOrbit AI backend solution.
+
+    Per docs/04-technology/package-policy.md PM-5, build properties live here rather
+    than in individual project files. No project should redeclare any of these.
+
+    Runtime target follows docs/04-technology/technology-stack.md §3 (TD-1): .NET 10 LTS.
+    .NET 9 is a Standard Term Support release and is outside its support window.
+  -->
+
+  <PropertyGroup Label="Target">
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!--
+    Defect controls from docs/04-technology/coding-standards.md §4.1.
+
+    C-1 and C-2 must never be relaxed. An unawaited async call in a handler silently
+    discards work — potentially an audit write. Nullability errors prevent a defect
+    class the domain model depends on.
+  -->
+  <PropertyGroup Label="Correctness">
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+
+  <!--
+    Reproducibility. docs/04-technology/package-policy.md PM-23: a clean checkout
+    restores and builds with a single documented command.
+  -->
+  <PropertyGroup Label="Build">
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Identity">
+    <Company>MaintOrbit AI</Company>
+    <Product>MaintOrbit AI</Product>
+    <Authors>MaintOrbit AI</Authors>
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
+
+  <!--
+    Test projects are not packable and do not need the correctness gates relaxed.
+    Identified by convention: everything under tests/.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('tests'))" Label="Tests">
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+</Project>

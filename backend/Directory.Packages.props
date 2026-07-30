@@ -1,0 +1,41 @@
+<Project>
+
+  <!--
+    Central package management for the MaintOrbit AI backend solution.
+
+    docs/04-technology/package-policy.md:
+      PM-1  Central package management is enabled
+      PM-2  Project files declare PackageReference WITHOUT a Version attribute
+      PM-3  Versions are declared once, here, and apply to every project
+      PM-4  A version override in a project file requires a recorded reason
+
+    Without this, EF Core can sit at one version in Infrastructure and another in a
+    test project — producing failures that reproduce in CI and not locally, or the
+    reverse.
+
+    Adding a package requires passing the six admission gates in
+    docs/04-technology/dependency-policy.md §3. The intended dependency set is
+    inventoried in docs/04-technology/backend-technologies.md; entries are added here
+    as the milestone that needs them lands, not in advance.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!--
+    Testing — docs/04-technology/backend-technologies.md §11.
+
+    NSubstitute is chosen over Moq, which introduced a contentious telemetry dependency.
+    Shouldly is chosen over FluentAssertions, whose v8+ requires a commercial licence
+    for commercial use (risk TR-11).
+  -->
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+  </ItemGroup>
+
+</Project>

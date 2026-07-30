@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MaintOrbit.Application\MaintOrbit.Application.csproj" />
+    <ProjectReference Include="..\MaintOrbit.Infrastructure\MaintOrbit.Infrastructure.csproj" />
+    <ProjectReference Include="..\MaintOrbit.Shared\MaintOrbit.Shared.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+  </PropertyGroup>
+
+</Project>

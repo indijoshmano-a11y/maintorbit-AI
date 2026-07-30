@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MaintOrbit.Domain\MaintOrbit.Domain.csproj" />
+    <ProjectReference Include="..\..\src\MaintOrbit.Shared\MaintOrbit.Shared.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+  </PropertyGroup>
+
+</Project>
