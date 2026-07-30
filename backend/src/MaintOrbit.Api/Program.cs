@@ -1,12 +1,13 @@
 using MaintOrbit.Api.Extensions;
+using MaintOrbit.Api.HealthChecks;
 using MaintOrbit.Application.DependencyInjection;
 using MaintOrbit.Infrastructure.DependencyInjection;
 
 // Composition root for the MaintOrbit AI API host.
 //
-// Milestone 10.3 establishes the dependency injection foundation. Middleware, endpoints,
-// authentication, health checks, and module registration are added in later milestones —
-// see docs/02-architecture/backend-architecture-overview.md.
+// Milestone 10.4 adds logging, correlation, and health endpoints. Middleware, authentication,
+// business endpoints, and module registration are added in later milestones — see
+// docs/02-architecture/backend-architecture-overview.md.
 //
 // This file stays minimal by design: each layer owns its registration, so the composition
 // root reads as a sequence of intentions rather than a list of mechanics.
@@ -25,9 +26,12 @@ builder.Host.UseValidatedServiceProvider();
 builder.Services
     .AddApplication()
     .AddInfrastructure(builder.Configuration)
-    .AddApi(builder.Configuration);
+    .AddApi(builder.Configuration)
+    .AddObservability(builder.Configuration);
 
 var app = builder.Build();
+
+app.MapHealthEndpoints();
 
 app.Run();
 

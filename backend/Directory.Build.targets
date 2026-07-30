@@ -28,8 +28,19 @@
     Scoped to real test projects deliberately. MaintOrbit.TestUtilities is an ordinary
     library whose members should follow ordinary naming, so it must not inherit this.
   -->
+  <!--
+    CA1848 — "use LoggerMessage delegates instead of ILogger.LogInformation"
+
+    A performance rule about allocation on high-throughput logging paths. It is right about
+    production code and irrelevant here: a test that exercises the logging pipeline logs
+    once, and rewriting that single call as a source-generated delegate would obscure what
+    the test is actually asserting.
+
+    Scoped to test projects only, so the rule keeps applying to every path that runs under
+    load. Application code must still use LoggerMessage.
+  -->
   <PropertyGroup Condition="'$(IsTestProject)' == 'true'" Label="TestProjects">
-    <NoWarn>$(NoWarn);CA1707</NoWarn>
+    <NoWarn>$(NoWarn);CA1707;CA1848</NoWarn>
   </PropertyGroup>
 
 </Project>
