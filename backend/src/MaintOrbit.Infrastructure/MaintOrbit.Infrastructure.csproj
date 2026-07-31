@@ -25,4 +25,11 @@
   </ItemGroup>
 
 
+  <ItemGroup>
+    <!-- TenantSession is internal deliberately: nothing outside this assembly should build the
+         tenant SQL. The drift guard between it and the applied migration is an internal
+         invariant, so the test that holds it needs access rather than the type being widened. -->
+    <InternalsVisibleTo Include="MaintOrbit.Api.FunctionalTests" />
+  </ItemGroup>
+
 </Project>

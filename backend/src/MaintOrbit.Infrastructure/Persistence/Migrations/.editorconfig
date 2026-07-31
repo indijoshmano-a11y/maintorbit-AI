@@ -1,0 +1,18 @@
+# Migrations are generated artifacts and, once applied, immutable records of what was applied.
+#
+# The codebase's style and performance rules exist for hand-written code. Applying them here
+# means either editing generated output by hand — which is undone the next time a migration is
+# added — or shaping the model to make the generator emit conforming code, which is the tail
+# wagging the dog.
+#
+# Scoped to this directory only. Everything outside it still builds with warnings as errors.
+
+[*.cs]
+generated_code = true
+
+# Emitted by the generator, one call per index:
+#   columns: new[] { "company_id", "email" }
+dotnet_diagnostic.CA1861.severity = none
+
+# The generator emits block-scoped namespaces.
+dotnet_diagnostic.IDE0161.severity = none

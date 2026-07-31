@@ -1,6 +1,9 @@
+using MaintOrbit.Infrastructure.MultiTenancy;
 using MaintOrbit.Infrastructure.Persistence;
+using MaintOrbit.Infrastructure.Persistence.Interceptors;
 using MaintOrbit.Infrastructure.Telemetry;
 using MaintOrbit.Shared.Abstractions;
+using MaintOrbit.Shared.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,9 +40,24 @@ public static class InfrastructureServiceCollectionExtensions
 
         AddClock(services);
         AddCorrelation(services);
+        AddTenantContext(services);
         AddPersistence(services, configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Registers the ambient tenant context.
+    /// </summary>
+    /// <remarks>
+    /// Singleton for the same reason as the correlation accessor: the accessor is stateless and
+    /// the value lives in the caller's execution context (DI-3). A scoped registration would make
+    /// every component that reads the tenant request-scoped by contagion, and would leave the
+    /// Worker unable to establish context at all — which TC-5 requires it to do.
+    /// </remarks>
+    private static void AddTenantContext(IServiceCollection services)
+    {
+        services.TryAddSingleton<ITenantContext, TenantContextAccessor>();
     }
 
     /// <summary>
@@ -72,9 +90,17 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IValidateOptions<PersistenceOptions>, PersistenceOptionsValidator>();
 
         services.AddDbContext<MaintOrbitDbContext>((provider, builder) =>
+        {
             NpgsqlConfiguration.Apply(
                 builder,
-                provider.GetRequiredService<IOptions<PersistenceOptions>>().Value));
+                provider.GetRequiredService<IOptions<PersistenceOptions>>().Value);
+
+            // Applies the tenant session variable at checkout and clears it at return (TC-4).
+            // Registered here rather than in NpgsqlConfiguration so the design-time factory,
+            // which has no service provider and no tenant, does not need one.
+            builder.AddInterceptors(
+                new TenantConnectionInterceptor(provider.GetRequiredService<ITenantContext>()));
+        });
     }
 
     /// <summary>
