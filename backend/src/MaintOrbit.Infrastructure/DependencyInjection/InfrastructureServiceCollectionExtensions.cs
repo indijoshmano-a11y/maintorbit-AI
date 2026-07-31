@@ -1,8 +1,11 @@
+using MaintOrbit.Infrastructure.Persistence;
 using MaintOrbit.Infrastructure.Telemetry;
 using MaintOrbit.Shared.Abstractions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace MaintOrbit.Infrastructure.DependencyInjection;
 
@@ -34,8 +37,44 @@ public static class InfrastructureServiceCollectionExtensions
 
         AddClock(services);
         AddCorrelation(services);
+        AddPersistence(services, configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Registers the database context and its settings.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="MaintOrbitDbContext"/> is scoped — the EF default and the right one. A context
+    /// carries change-tracking state for a unit of work, so sharing one across requests would
+    /// leak entities between them, and under multi-tenancy that means leaking them between
+    /// Companies.
+    /// <para>
+    /// <b>Not <c>AddDbContextPool</c>.</b> Context pooling resets and reuses context instances,
+    /// which interacts with the connection pooling mode that DD-2 has not settled —
+    /// <c>docs/06-database/database-design.md</c> §5 records that mode as blocking
+    /// implementation, and §6.7 explains that it is a security decision. Adding a second layer
+    /// of reuse before the first is decided would prejudge it.
+    /// </para>
+    /// </remarks>
+    private static void AddPersistence(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<PersistenceOptions>()
+            .Bind(configuration.GetSection(PersistenceOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton. ValidateDataAnnotations already registers an
+        // IValidateOptions<PersistenceOptions>, so TryAdd sees the service type as present and
+        // silently does nothing — leaving the cross-property rules unenforced while every
+        // isolated test of the validator still passes.
+        services.AddSingleton<IValidateOptions<PersistenceOptions>, PersistenceOptionsValidator>();
+
+        services.AddDbContext<MaintOrbitDbContext>((provider, builder) =>
+            NpgsqlConfiguration.Apply(
+                builder,
+                provider.GetRequiredService<IOptions<PersistenceOptions>>().Value));
     }
 
     /// <summary>

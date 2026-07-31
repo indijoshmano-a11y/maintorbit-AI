@@ -44,7 +44,8 @@ internal static class PipelineTestHost
                             ["Application:Name"] = "MaintOrbit AI",
                             ["Application:PublicBaseUrl"] = "https://api.example.test",
                             ["Cors:AllowCredentials"] = "true",
-                            ["Cors:AllowedOrigins:0"] = "https://console.example.test"
+                            ["Cors:AllowedOrigins:0"] = "https://console.example.test",
+                            ["Persistence:ConnectionString"] = "Host=localhost;Database=maintorbit_test;Username=maintorbit"
                         })
                         .Build();
 
