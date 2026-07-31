@@ -52,6 +52,19 @@
     Npgsql move together as one coordinated release train - the documented exception to
     "one major upgrade at a time".
   -->
+  <!--
+    Argon2id (SD-010). Accepted through docs/04-technology/dependency-policy.md:
+    Gate 1 self-hostable - pure managed, no native binary; Gate 2 licence - MIT;
+    Gate 4 - a key derivation function is never hand-written; Gate 5 replaceability -
+    employee_credentials records algorithm and password_version per row, so a swap
+    re-hashes each credential on next authentication.
+    Gates 3 and 6 (maintenance health, named owner) require a human and an entry in the
+    technology inventory, which this milestone does not modify.
+  -->
+  <ItemGroup Label="Cryptography">
+    <PackageVersion Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
+  </ItemGroup>
+
   <ItemGroup Label="Persistence">
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />

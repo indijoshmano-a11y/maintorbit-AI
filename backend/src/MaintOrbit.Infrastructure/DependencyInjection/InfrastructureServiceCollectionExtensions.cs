@@ -1,3 +1,5 @@
+using MaintOrbit.Application.Abstractions.Security;
+using MaintOrbit.Infrastructure.Authentication;
 using MaintOrbit.Infrastructure.MultiTenancy;
 using MaintOrbit.Infrastructure.Persistence;
 using MaintOrbit.Infrastructure.Persistence.Interceptors;
@@ -42,6 +44,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddCorrelation(services);
         AddTenantContext(services);
         AddPersistence(services, configuration);
+        AddPasswordHashing(services, configuration);
 
         return services;
     }
@@ -101,6 +104,30 @@ public static class InfrastructureServiceCollectionExtensions
             builder.AddInterceptors(
                 new TenantConnectionInterceptor(provider.GetRequiredService<ITenantContext>()));
         });
+    }
+
+    /// <summary>
+    /// Registers password hashing and its parameters.
+    /// </summary>
+    /// <remarks>
+    /// Singleton: the hasher holds no per-request state, and reads its parameters through
+    /// <c>IOptions</c> on each call rather than capturing them (DI-3). Registered against
+    /// <see cref="IPasswordHasher"/> so no caller can reach the algorithm (DI-6) — which is what
+    /// makes replacing it a configuration and re-hash exercise rather than a code change.
+    /// </remarks>
+    private static void AddPasswordHashing(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<PasswordHashingOptions>()
+            .Bind(configuration.GetSection(PasswordHashingOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton: ValidateDataAnnotations has already registered an
+        // IValidateOptions<PasswordHashingOptions>, and TryAdd would see the service type as
+        // present and silently do nothing.
+        services.AddSingleton<IValidateOptions<PasswordHashingOptions>, PasswordHashingOptionsValidator>();
+
+        services.TryAddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
     }
 
     /// <summary>
