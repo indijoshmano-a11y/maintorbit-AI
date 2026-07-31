@@ -1,4 +1,7 @@
+using MaintOrbit.Application.Abstractions.Messaging;
+using MaintOrbit.Application.Modules.Identity.Commands.AcceptInvitation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace MaintOrbit.Application.DependencyInjection;
 
@@ -25,6 +28,12 @@ public static class ApplicationServiceCollectionExtensions
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        // Registered explicitly, one per use case. When the ADR-0012 dispatcher lands it resolves
+        // handlers by this registration; nothing about the handler changes.
+        services.TryAddScoped<
+            ICommandHandler<AcceptInvitationCommand>,
+            AcceptInvitationCommandHandler>();
 
         return services;
     }

@@ -1,3 +1,4 @@
+using MaintOrbit.Domain.Common.Results;
 using MaintOrbit.Domain.Modules.Identity.Enums;
 using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 using MaintOrbit.Shared.MultiTenancy;
@@ -157,5 +158,51 @@ public sealed class Employee
             CreatedByEmployeeId = invitedBy,
             UpdatedByEmployeeId = invitedBy
         };
+    }
+
+    /// <summary>
+    /// Activates an invited Employee.
+    /// </summary>
+    /// <remarks>
+    /// The transition an accepted invitation performs. Returns a result rather than throwing
+    /// because "already active" is an expected outcome — a caller double-submitting a form, or
+    /// retrying after a timeout — not an exceptional one (EX-1).
+    /// <para>
+    /// <b>Activation verifies the email address.</b> FR-AUTH-013 requires verification before an
+    /// account becomes active, and completing an invitation is that proof: the token was
+    /// delivered to the address and came back. Leaving <c>email_verified_at_utc</c> null here
+    /// would mean either an active-but-unverified account, which FR-AUTH-013 forbids, or a
+    /// second verification round trip to the address that just demonstrated it works.
+    /// </para>
+    /// <para>
+    /// The rule lives here rather than in the calling handler so there is one definition of when
+    /// an Employee may become active, whatever reaches it.
+    /// </para>
+    /// </remarks>
+    public Result Activate(DateTimeOffset activatedAtUtc)
+    {
+        if (Status == EmployeeStatus.Active)
+        {
+            return Result.Failure(Error.Conflict("The Employee is already active."));
+        }
+
+        if (Status != EmployeeStatus.Invited)
+        {
+            // Suspended and Removed are not reachable by accepting an invitation. Reinstating
+            // either is an administrative act with its own authorization and audit trail.
+            return Result.Failure(Error.Conflict(
+                $"An Employee with status {Status} cannot be activated by accepting an invitation."));
+        }
+
+        if (IsDeleted)
+        {
+            return Result.Failure(Error.Conflict("A removed Employee cannot be activated."));
+        }
+
+        Status = EmployeeStatus.Active;
+        EmailVerifiedAtUtc = activatedAtUtc;
+        UpdatedAtUtc = activatedAtUtc;
+
+        return Result.Success();
     }
 }

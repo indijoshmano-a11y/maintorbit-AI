@@ -28,6 +28,24 @@ internal sealed class Argon2idPasswordHasher(IOptions<PasswordHashingOptions> op
     private PasswordHashingOptions Options => options.Value;
 
     /// <inheritdoc />
+    public PasswordHashVersion CurrentVersion => new(Options.Version);
+
+    /// <inheritdoc />
+    public string CurrentParameters
+    {
+        get
+        {
+            var current = Options;
+
+            // The same field the PHC string carries, in the same form, so a row and its hash
+            // never disagree about what produced it.
+            return string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"m={current.MemoryKibibytes},t={current.Iterations},p={current.Parallelism}");
+        }
+    }
+
+    /// <inheritdoc />
     public PasswordHash Hash(ReadOnlySpan<char> password)
     {
         if (password.IsEmpty)

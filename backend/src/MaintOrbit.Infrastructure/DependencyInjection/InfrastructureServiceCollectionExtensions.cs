@@ -1,4 +1,7 @@
+using MaintOrbit.Application.Abstractions.Persistence;
 using MaintOrbit.Application.Abstractions.Security;
+using MaintOrbit.Domain.Modules.Identity.Repositories;
+using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
 using MaintOrbit.Infrastructure.MultiTenancy;
 using MaintOrbit.Infrastructure.Persistence;
@@ -45,6 +48,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddTenantContext(services);
         AddPersistence(services, configuration);
         AddPasswordHashing(services, configuration);
+        AddRepositories(services);
 
         return services;
     }
@@ -104,6 +108,26 @@ public static class InfrastructureServiceCollectionExtensions
             builder.AddInterceptors(
                 new TenantConnectionInterceptor(provider.GetRequiredService<ITenantContext>()));
         });
+    }
+
+    /// <summary>
+    /// Registers the identity repositories and the unit of work.
+    /// </summary>
+    /// <remarks>
+    /// Scoped, matching <see cref="MaintOrbitDbContext"/>. All three resolve the same context
+    /// instance within a scope, and that shared instance <i>is</i> the unit of work — a repository
+    /// holding a different context would track its aggregate somewhere the commit never looks.
+    /// <para>
+    /// Registered here rather than by assembly scanning. Twelve modules will each add a few
+    /// repositories, and a scan would register whatever happened to implement the shape, including
+    /// a test double left in the wrong assembly.
+    /// </para>
+    /// </remarks>
+    private static void AddRepositories(IServiceCollection services)
+    {
+        services.TryAddScoped<IUnitOfWork, UnitOfWork>();
+        services.TryAddScoped<IEmployeeRepository, EmployeeRepository>();
+        services.TryAddScoped<IEmployeeCredentialRepository, EmployeeCredentialRepository>();
     }
 
     /// <summary>

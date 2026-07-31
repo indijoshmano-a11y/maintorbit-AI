@@ -20,6 +20,26 @@ namespace MaintOrbit.Application.Abstractions.Security;
 public interface IPasswordHasher
 {
     /// <summary>
+    /// The parameter generation this hasher is currently configured to produce.
+    /// </summary>
+    /// <remarks>
+    /// Recorded on each credential as <c>password_version</c> so that a parameter review (SD-010)
+    /// can find the rows it left behind. Exposed on the port because the caller writing the row
+    /// must record it, and asking the caller to know it independently would let the two drift.
+    /// </remarks>
+    PasswordHashVersion CurrentVersion { get; }
+
+    /// <summary>
+    /// The cost parameters this hasher is currently configured with.
+    /// </summary>
+    /// <remarks>
+    /// Stored per row as <c>hash_parameters</c>, which §4.2 requires so that a parameter change
+    /// does not invalidate existing hashes. It duplicates what the PHC string already encodes,
+    /// deliberately: the column is queryable, the encoded string is not.
+    /// </remarks>
+    string CurrentParameters { get; }
+
+    /// <summary>
     /// Derives a hash for a new or changed password.
     /// </summary>
     /// <remarks>
