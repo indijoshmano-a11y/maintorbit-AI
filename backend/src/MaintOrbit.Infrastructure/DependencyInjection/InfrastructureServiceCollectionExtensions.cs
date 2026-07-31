@@ -113,6 +113,11 @@ public static class InfrastructureServiceCollectionExtensions
     /// </remarks>
     private static void AddClock(IServiceCollection services)
     {
-        services.AddSingleton(TimeProvider.System);
+        // TryAdd, matching the correlation accessor. A plain Add makes a repeated
+        // AddInfrastructure call register the clock twice: GetRequiredService still returns the
+        // last one, so nothing appears wrong, while GetServices yields two. That is harmless
+        // only because TimeProvider.System is a shared static — the day a controllable clock is
+        // registered the same way, half the system would resolve a different instance.
+        services.TryAddSingleton(TimeProvider.System);
     }
 }
