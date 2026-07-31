@@ -95,16 +95,17 @@ public sealed class DbContextRegistrationTests
     }
 
     [Fact]
-    public void Model_ExposesNoEntityTypes()
+    public void Model_ExposesOnlyTheIdentityAggregatesBuiltSoFar()
     {
-        // D-1 blocks all schema design until row-level-security tenancy is ratified. An empty
-        // model is the correct state, and this test is what makes adding an entity a
-        // deliberate act that updates this expectation rather than a quiet one.
+        // Updated deliberately in 11.1, which is what the previous "model is empty" assertion
+        // existed to force. Every entity is named, so the next one added updates this too.
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<MaintOrbitDbContext>();
 
-        Assert.Empty(context.Model.GetEntityTypes());
+        Assert.Equal(
+            ["MaintOrbit.Domain.Modules.Identity.Entities.Employee"],
+            context.Model.GetEntityTypes().Select(entity => entity.Name).Order(StringComparer.Ordinal));
     }
 
     [Fact]

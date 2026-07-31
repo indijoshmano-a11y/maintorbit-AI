@@ -177,17 +177,16 @@ public sealed class BackendFoundationTests : IClassFixture<WebApplicationFactory
     // ---- Gate 5: persistence -------------------------------------------------------------------
 
     [Fact]
-    public void Persistence_UsesPostgreSQLAndCarriesNoEntitiesYet()
+    public void Persistence_UsesPostgreSQL_AndCarriesTheIdentityModel()
     {
         // ADR-0004 fixes PostgreSQL as the system of record; a provider swapped for test
         // convenience would silently remove row-level security, which is the tenancy control
-        // itself. The empty model is D-1's doing and is asserted so adding an entity is
-        // deliberate.
+        // itself.
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<MaintOrbitDbContext>();
 
         Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
-        Assert.Empty(context.Model.GetEntityTypes());
+        Assert.Single(context.Model.GetEntityTypes());
     }
 
     [Fact]

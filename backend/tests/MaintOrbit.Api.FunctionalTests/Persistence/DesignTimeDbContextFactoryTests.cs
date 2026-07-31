@@ -32,11 +32,12 @@ public sealed class DesignTimeDbContextFactoryTests
         // The reason both paths share NpgsqlConfiguration. If they configured the provider
         // separately they would drift, and the symptom is a migration generated against
         // settings the application does not run with — found only when it is applied.
+        // The identity model must therefore be present here exactly as it is at runtime.
         var factory = new DesignTimeDbContextFactory();
 
         using var context = factory.CreateDbContext([]);
 
-        Assert.Empty(context.Model.GetEntityTypes());
+        Assert.Single(context.Model.GetEntityTypes());
     }
 
     [Fact]

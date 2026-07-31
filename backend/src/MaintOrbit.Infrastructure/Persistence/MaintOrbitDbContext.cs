@@ -1,3 +1,6 @@
+using MaintOrbit.Domain.Modules.Identity.Entities;
+using MaintOrbit.Domain.Modules.Identity.ValueObjects;
+using MaintOrbit.Shared.MultiTenancy;
 using MaintOrbit.Infrastructure.Persistence.Conventions;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +26,42 @@ namespace MaintOrbit.Infrastructure.Persistence;
 public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> options)
     : DbContext(options)
 {
+    /// <summary>
+    /// Employees — the identity module's aggregate root.
+    /// </summary>
+    /// <remarks>
+    /// Exposed as a set because the identity module owns it. Sets are added per aggregate root,
+    /// not per table: <c>employee_credentials</c>, <c>sessions</c>, and the rest are reached
+    /// through their own aggregates, and <c>employee_credentials</c> in particular is C4 data
+    /// that must never be loaded alongside an ordinary Employee read.
+    /// </remarks>
+    public DbSet<Employee> Employees => Set<Employee>();
+
+    /// <summary>
+    /// Registers value-object conversions before the model is discovered.
+    /// </summary>
+    /// <remarks>
+    /// Must happen here rather than per property. EF discovers entity types before entity
+    /// configurations run, so a value object that is a reference type is discovered as an entity
+    /// and a later HasConversion leaves that stray type in the model.
+    /// </remarks>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(configurationBuilder);
+
+        base.ConfigureConventions(configurationBuilder);
+
+        configurationBuilder.Properties<EmployeeId>()
+            .HaveConversion<ValueObjectConverters.EmployeeIdConverter>();
+
+        configurationBuilder.Properties<CompanyId>()
+            .HaveConversion<ValueObjectConverters.CompanyIdConverter>();
+
+        configurationBuilder.Properties<Email>()
+            .HaveConversion<ValueObjectConverters.EmailConverter>()
+            .HaveMaxLength(Email.MaxLength);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
