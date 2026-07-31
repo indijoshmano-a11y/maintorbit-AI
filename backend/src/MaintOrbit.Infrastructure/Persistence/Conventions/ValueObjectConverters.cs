@@ -26,6 +26,21 @@ internal static class ValueObjectConverters
     internal sealed class EmployeeIdConverter()
         : ValueConverter<EmployeeId, Guid>(id => id.Value, value => new EmployeeId(value));
 
+    /// <summary>Maps <see cref="EmployeeCredentialId"/> to <c>uuid</c>.</summary>
+    internal sealed class EmployeeCredentialIdConverter()
+        : ValueConverter<EmployeeCredentialId, Guid>(id => id.Value, value => new EmployeeCredentialId(value));
+
+    /// <summary>
+    /// Maps <see cref="PasswordHash"/> to text.
+    /// </summary>
+    /// <remarks>
+    /// The one place C4 material is deliberately unwrapped. It exists so that nothing else has
+    /// to reach for <see cref="PasswordHash.Value"/>, which is the property that turns a hash
+    /// back into an ordinary string.
+    /// </remarks>
+    internal sealed class PasswordHashConverter()
+        : ValueConverter<PasswordHash, string>(hash => hash.Value, value => PasswordHash.Create(value));
+
     /// <summary>Maps <see cref="CompanyId"/> to <c>uuid</c>.</summary>
     internal sealed class CompanyIdConverter()
         : ValueConverter<CompanyId, Guid>(id => id.Value, value => new CompanyId(value));

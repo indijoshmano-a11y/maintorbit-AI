@@ -38,6 +38,17 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     public DbSet<Employee> Employees => Set<Employee>();
 
     /// <summary>
+    /// Password credentials — C4 data.
+    /// </summary>
+    /// <remarks>
+    /// A separate set from <see cref="Employees"/> deliberately. §4.2 classifies this table C4:
+    /// never logged, never in error messages, never leaves production. Reaching it must be an
+    /// explicit act, so that an ordinary Employee read cannot pull a password hash into memory
+    /// as a side effect of loading a navigation property.
+    /// </remarks>
+    public DbSet<EmployeeCredential> EmployeeCredentials => Set<EmployeeCredential>();
+
+    /// <summary>
     /// Registers value-object conversions before the model is discovered.
     /// </summary>
     /// <remarks>
@@ -53,6 +64,13 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
 
         configurationBuilder.Properties<EmployeeId>()
             .HaveConversion<ValueObjectConverters.EmployeeIdConverter>();
+
+        configurationBuilder.Properties<EmployeeCredentialId>()
+            .HaveConversion<ValueObjectConverters.EmployeeCredentialIdConverter>();
+
+        configurationBuilder.Properties<PasswordHash>()
+            .HaveConversion<ValueObjectConverters.PasswordHashConverter>()
+            .HaveMaxLength(PasswordHash.MaxLength);
 
         configurationBuilder.Properties<CompanyId>()
             .HaveConversion<ValueObjectConverters.CompanyIdConverter>();

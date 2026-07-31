@@ -104,7 +104,10 @@ public sealed class DbContextRegistrationTests
         var context = scope.ServiceProvider.GetRequiredService<MaintOrbitDbContext>();
 
         Assert.Equal(
-            ["MaintOrbit.Domain.Modules.Identity.Entities.Employee"],
+            [
+                "MaintOrbit.Domain.Modules.Identity.Entities.Employee",
+                "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeCredential"
+            ],
             context.Model.GetEntityTypes().Select(entity => entity.Name).Order(StringComparer.Ordinal));
     }
 

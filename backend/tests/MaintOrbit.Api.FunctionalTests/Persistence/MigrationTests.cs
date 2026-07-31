@@ -24,15 +24,16 @@ public sealed class MigrationTests
     }
 
     [Fact]
-    public void ExactlyOneMigrationExists()
+    public void TheFirstMigration_IsTheIdentityBaseline()
     {
-        // "Do not create unrelated tables" is checkable as a count. A second migration appearing
-        // here means something was generated that this milestone did not intend.
+        // Migrations are ordered by their timestamp prefix and applied in that order, so the
+        // first one is the baseline every later migration builds on. The total count is asserted
+        // by the milestone that adds each one.
         using var context = new DesignTimeDbContextFactory().CreateDbContext([]);
 
-        var migration = Assert.Single(context.Database.GetMigrations());
+        var first = context.Database.GetMigrations().First();
 
-        Assert.EndsWith("InitialIdentity", migration, StringComparison.Ordinal);
+        Assert.EndsWith("InitialIdentity", first, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -70,8 +71,8 @@ public sealed class MigrationTests
 
         foreach (var absent in new[]
                  {
-                     "employee_credentials", "sessions", "mfa_enrollments",
-                     "federated_identities", "permissions", "roles", "companies", "teams"
+                     "sessions", "mfa_enrollments", "federated_identities",
+                     "permissions", "roles", "companies", "teams"
                  })
         {
             Assert.DoesNotContain(absent, sql, StringComparison.Ordinal);

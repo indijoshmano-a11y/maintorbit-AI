@@ -37,7 +37,7 @@ public sealed class DesignTimeDbContextFactoryTests
 
         using var context = factory.CreateDbContext([]);
 
-        Assert.Single(context.Model.GetEntityTypes());
+        Assert.Equal(2, context.Model.GetEntityTypes().Count());
     }
 
     [Fact]
