@@ -39,31 +39,7 @@ internal sealed class JwtAccessTokenValidator : IAccessTokenValidator
         ArgumentNullException.ThrowIfNull(keyRing);
 
         var value = options.Value;
-
-        _parameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = value.Issuer,
-
-            ValidateAudience = true,
-            ValidAudience = value.Audience,
-
-            ValidateLifetime = true,
-            RequireExpirationTime = true,
-
-            ValidateIssuerSigningKey = true,
-            RequireSignedTokens = true,
-            IssuerSigningKeys = keyRing.ValidationKeys,
-
-            // Only RS256. This single line is the defence against alg:none and against an HMAC
-            // token forged with the public key as its secret.
-            ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
-
-            // No skew. The library default is five minutes, which on a fifteen-minute token is a
-            // third of its life granted after expiry — and SD-013 bounds the value of a stolen
-            // token by that lifetime. Hosts are expected to be time-synchronised.
-            ClockSkew = TimeSpan.Zero
-        };
+        _parameters = AccessTokenValidationParameters.Create(value, keyRing);
     }
 
     /// <inheritdoc />

@@ -137,6 +137,10 @@ public static class InfrastructureServiceCollectionExtensions
             .ValidateOnStart();
 
         services.TryAddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
+
+        // Scoped: it reads a session through the repository, which shares the request's DbContext
+        // and therefore the tenant scope the caller opened.
+        services.TryAddScoped<ISessionValidator, SessionValidator>();
     }
 
     /// <summary>
@@ -165,6 +169,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
 
         services.TryAddSingleton<SigningKeyRing>();
+        services.TryAddSingleton<IAccessTokenValidationParametersFactory,
+            AccessTokenValidationParametersFactory>();
         services.TryAddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
         services.TryAddSingleton<IAccessTokenValidator, JwtAccessTokenValidator>();
     }

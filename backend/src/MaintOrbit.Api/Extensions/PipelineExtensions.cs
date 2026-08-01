@@ -1,4 +1,5 @@
 using MaintOrbit.Api.Configuration;
+using MaintOrbit.Api.Middleware;
 using Microsoft.Extensions.Options;
 
 namespace MaintOrbit.Api.Extensions;
@@ -39,6 +40,12 @@ public static class PipelineExtensions
     /// <b>Exception handling</b> innermost of the cross-cutting three, wrapping routing,
     /// endpoints, and everything later milestones add between here and the handler.
     /// </description></item>
+    /// <item><description>
+    /// <b>Routing, then authentication, then authorization, then tenant context.</b> Routing first
+    /// so an endpoint's own requirements are known by the time the request is authenticated;
+    /// tenant context last of the four because it reads the validated principal, and its scope
+    /// must still be open when an endpoint queries.
+    /// </description></item>
     /// </list>
     /// Endpoint mapping stays with the composition root, since what is mapped is a
     /// composition decision rather than an ordering one.
@@ -60,6 +67,17 @@ public static class PipelineExtensions
         app.UseCorrelationId();
         app.UseRequestLogging();
         app.UseExceptionHandling();
+
+        // Routing must precede authentication so an endpoint's own requirements are known by the
+        // time the request is authenticated.
+        app.UseRouting();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        // After authentication, because it reads the validated principal; before endpoints,
+        // because everything downstream queries within the tenant scope it opens.
+        app.UseMiddleware<TenantContextMiddleware>();
 
         return app;
     }

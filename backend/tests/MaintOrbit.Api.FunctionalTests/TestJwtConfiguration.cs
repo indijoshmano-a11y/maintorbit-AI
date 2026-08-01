@@ -22,6 +22,19 @@ namespace MaintOrbit.Api.FunctionalTests;
 /// </remarks>
 internal static class TestJwtConfiguration
 {
+    static TestJwtConfiguration()
+    {
+        // Microsoft.IdentityModel caches signature providers globally, keyed by the key material.
+        // Every host in this assembly imports the same PEM, so once one host's key ring is
+        // disposed the cached provider holds a disposed RSA and the next host's signing throws
+        // ObjectDisposedException. Production has one process, one key ring, and one lifetime;
+        // this is purely an artefact of building many hosts from one key.
+        Microsoft.IdentityModel.Tokens.CryptoProviderFactory.Default.CacheSignatureProviders = false;
+    }
+
+    /// <summary>The generated key, so a test can sign a token the host will accept.</summary>
+    public static string SigningKeyPem => PrivateKeyPem.Value;
+
     private static readonly Lazy<string> PrivateKeyPem = new(
         static () =>
         {

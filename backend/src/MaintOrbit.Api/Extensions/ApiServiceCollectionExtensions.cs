@@ -1,3 +1,7 @@
+using MaintOrbit.Api.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
+
 namespace MaintOrbit.Api.Extensions;
 
 /// <summary>
@@ -21,6 +25,13 @@ public static class ApiServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddApplicationConfiguration(configuration);
+        services.AddJwtBearerAuthentication();
+
+        // Applies the shared validation parameters once JwtOptions and the key ring resolve. The
+        // bearer options are built by the authentication framework, so they cannot take the
+        // dependency directly.
+        services.AddSingleton<IConfigureOptions<JwtBearerOptions>,
+            MaintOrbit.Api.Authentication.AuthenticationServiceCollectionExtensions.ConfigureJwtBearer>();
 
         return services;
     }
