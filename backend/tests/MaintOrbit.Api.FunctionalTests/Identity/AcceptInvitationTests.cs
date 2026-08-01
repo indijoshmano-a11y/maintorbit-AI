@@ -283,6 +283,9 @@ public sealed class AcceptInvitationTests
         public Task<Employee?> FindAsync(EmployeeId id, CancellationToken cancellationToken) =>
             Task.FromResult(_employees.GetValueOrDefault(id));
 
+        public Task<Employee?> FindByEmailAsync(Email email, CancellationToken cancellationToken) =>
+            Task.FromResult(_employees.Values.FirstOrDefault(e => e.Email == email));
+
         public void Add(Employee employee) => _employees[employee.Id] = employee;
     }
 
@@ -296,6 +299,10 @@ public sealed class AcceptInvitationTests
 
         public Task<bool> ExistsForAsync(EmployeeId employeeId, CancellationToken cancellationToken) =>
             Task.FromResult(_existing.Contains(employeeId));
+
+        public Task<EmployeeCredential?> FindForAsync(
+            EmployeeId employeeId, CancellationToken cancellationToken) =>
+            Task.FromResult(Added.FirstOrDefault(c => c.EmployeeId == employeeId));
 
         public void Add(EmployeeCredential credential) => Added.Add(credential);
     }

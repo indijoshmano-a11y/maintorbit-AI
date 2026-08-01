@@ -22,5 +22,14 @@ internal sealed class EmployeeRepository(MaintOrbitDbContext context) : IEmploye
         context.Employees.FirstOrDefaultAsync(employee => employee.Id == id, cancellationToken);
 
     /// <inheritdoc />
+    public Task<Employee?> FindByEmailAsync(Email email, CancellationToken cancellationToken) =>
+        // Compared as the stored value. Email normalizes to lowercase at construction, so an
+        // ordinal match is exact and the unique index serves the lookup — a case-insensitive
+        // comparison here would not use it.
+        context.Employees.FirstOrDefaultAsync(
+            employee => employee.Email == email && employee.DeletedAtUtc == null,
+            cancellationToken);
+
+    /// <inheritdoc />
     public void Add(Employee employee) => context.Employees.Add(employee);
 }

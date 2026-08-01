@@ -32,6 +32,22 @@ public interface IEmployeeRepository
     Task<Employee?> FindAsync(EmployeeId id, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Finds an Employee by email address, or <see langword="null"/> if none is visible.
+    /// </summary>
+    /// <remarks>
+    /// Resolves against <c>ux_employees_company_id_email</c>, which is unique <b>per Company</b>
+    /// and excludes soft-deleted rows — so within a tenant context this returns at most one, and a
+    /// removed Employee's address does not resurrect their account.
+    /// <para>
+    /// <b>Tenant-scoped, like every other read.</b> Row-level security applies, so this finds
+    /// nothing without a Company in scope. That places a real constraint on the caller, recorded
+    /// on the handler: how a login request determines which Company it is for is not documented,
+    /// and this milestone does not invent an answer.
+    /// </para>
+    /// </remarks>
+    Task<Employee?> FindByEmailAsync(Email email, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Adds a new Employee to the unit of work.
     /// </summary>
     /// <remarks>

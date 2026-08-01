@@ -31,6 +31,18 @@ public sealed record Error(string Code, string Description)
     /// <summary>The operation conflicts with the current state.</summary>
     public static Error Conflict(string description) => new("conflict", description);
 
+    /// <summary>
+    /// The credential was invalid or missing.
+    /// </summary>
+    /// <remarks>
+    /// §6.2 defines a single <c>authentication_failed</c> category for "invalid or missing
+    /// credential", and that singularity is the control: an unknown address, a wrong password, a
+    /// suspended account, and a locked one are all the same answer. Separating them would let a
+    /// caller enumerate which addresses exist and which accounts are worth attacking.
+    /// </remarks>
+    public static Error AuthenticationFailed(string description) =>
+        new("authentication_failed", description);
+
     /// <summary>The input failed validation.</summary>
     public static Error Validation(string description) => new("validation_failed", description);
 

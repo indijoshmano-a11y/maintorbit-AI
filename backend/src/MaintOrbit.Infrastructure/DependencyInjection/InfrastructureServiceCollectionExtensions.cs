@@ -125,6 +125,10 @@ public static class InfrastructureServiceCollectionExtensions
     /// </remarks>
     private static void AddRepositories(IServiceCollection services)
     {
+        // Singleton: the decoy hash is derived once per process. Per-request derivation would
+        // make the enumeration defence a denial-of-service amplifier of its own (T-5).
+        services.TryAddSingleton<IDecoyPasswordHash, DecoyPasswordHash>();
+
         services.TryAddScoped<IUnitOfWork, UnitOfWork>();
         services.TryAddScoped<IEmployeeRepository, EmployeeRepository>();
         services.TryAddScoped<IEmployeeCredentialRepository, EmployeeCredentialRepository>();

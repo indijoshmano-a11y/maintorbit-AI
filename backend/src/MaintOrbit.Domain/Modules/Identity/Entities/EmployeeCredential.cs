@@ -151,6 +151,27 @@ public sealed class EmployeeCredential
     public int RowVersion { get; private set; }
 
     /// <summary>
+    /// Whether a lockout is currently in force.
+    /// </summary>
+    /// <remarks>
+    /// Reads the state FR-AUTH-011 defines; it does not maintain it. Nothing in this build sets
+    /// <see cref="LockoutUntilUtc"/> yet — counting failures and notifying the holder is
+    /// authentication workflow and lands with it. The check exists now because the alternative
+    /// is a column that is enforced only once somebody remembers to add the check, and by then
+    /// the lockout has been silently ineffective for however long.
+    /// <para>
+    /// <b>No verification method lives on this aggregate.</b> Verifying a password requires the
+    /// key derivation function, and the domain cannot reach it: <c>IPasswordHasher</c> is an
+    /// application port, and a domain type depending on it would invert the dependency rule
+    /// ADR-0001 fixes — which an architecture test enforces by asserting the Domain project
+    /// carries no package reference at all. The aggregate owns the rules about its own state;
+    /// the cryptography stays outside it.
+    /// </para>
+    /// </remarks>
+    public bool IsLockedOut(DateTimeOffset asAtUtc) =>
+        LockoutUntilUtc is { } until && until > asAtUtc;
+
+    /// <summary>
     /// Establishes a password credential for an Employee.
     /// </summary>
     /// <remarks>

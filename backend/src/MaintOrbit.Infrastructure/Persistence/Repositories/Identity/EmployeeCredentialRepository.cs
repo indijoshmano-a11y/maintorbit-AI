@@ -19,5 +19,11 @@ internal sealed class EmployeeCredentialRepository(MaintOrbitDbContext context)
             .AnyAsync(credential => credential.EmployeeId == employeeId, cancellationToken);
 
     /// <inheritdoc />
+    public Task<EmployeeCredential?> FindForAsync(
+        EmployeeId employeeId, CancellationToken cancellationToken) =>
+        context.EmployeeCredentials.FirstOrDefaultAsync(
+            credential => credential.EmployeeId == employeeId, cancellationToken);
+
+    /// <inheritdoc />
     public void Add(EmployeeCredential credential) => context.EmployeeCredentials.Add(credential);
 }

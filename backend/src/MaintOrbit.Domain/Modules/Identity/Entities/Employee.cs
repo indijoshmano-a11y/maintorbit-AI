@@ -161,6 +161,24 @@ public sealed class Employee
     }
 
     /// <summary>
+    /// Whether this Employee is in a state that permits authentication.
+    /// </summary>
+    /// <remarks>
+    /// Only an <see cref="EmployeeStatus.Active"/>, non-deleted Employee may authenticate.
+    /// <see cref="EmployeeStatus.Invited"/> has not completed sign-up,
+    /// <see cref="EmployeeStatus.Suspended"/> has had access withdrawn, and
+    /// <see cref="EmployeeStatus.Removed"/> is retained only so ledger attribution survives —
+    /// none of the three is an account anyone should be able to sign in to.
+    /// <para>
+    /// Returns a plain <see cref="bool"/> rather than a reason. The caller must not vary its
+    /// response by reason, so a reason returned here would exist only to be discarded — and a
+    /// value that exists is a value someone eventually surfaces.
+    /// </para>
+    /// </remarks>
+    public bool CanAuthenticate() =>
+        Status == EmployeeStatus.Active && !IsDeleted;
+
+    /// <summary>
     /// Activates an invited Employee.
     /// </summary>
     /// <remarks>
