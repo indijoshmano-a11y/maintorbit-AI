@@ -19,14 +19,14 @@ public sealed class CompositionRootTests
 {
     private static IConfiguration ValidConfiguration() =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(TestJwtConfiguration.With(new Dictionary<string, string?>
             {
                 ["Application:Name"] = "MaintOrbit AI",
                 ["Application:PublicBaseUrl"] = "https://api.example.test",
                 ["Cors:AllowCredentials"] = "true",
                 ["Cors:AllowedOrigins:0"] = "https://console.example.test",
                 ["Persistence:ConnectionString"] = "Host=localhost;Database=maintorbit_test;Username=maintorbit"
-            })
+            }))
             .Build();
 
     private static ServiceProvider BuildCompositionRoot(ServiceProviderOptions options)

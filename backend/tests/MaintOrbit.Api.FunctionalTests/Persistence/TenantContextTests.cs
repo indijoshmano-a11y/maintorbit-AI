@@ -24,7 +24,7 @@ public sealed class TenantContextTests
     private static ServiceProvider BuildProvider()
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(TestJwtConfiguration.With(new Dictionary<string, string?>
             {
                 ["Application:Name"] = "MaintOrbit AI",
                 ["Application:PublicBaseUrl"] = "https://api.example.test",
@@ -32,7 +32,7 @@ public sealed class TenantContextTests
                 ["Cors:AllowedOrigins:0"] = "https://console.example.test",
                 ["Persistence:ConnectionString"] =
                     "Host=localhost;Database=maintorbit_test;Username=maintorbit"
-            })
+            }))
             .Build();
 
         var services = new ServiceCollection();

@@ -28,7 +28,8 @@ public sealed class FrameworkLeakageTests
         "Microsoft.AspNetCore",
         "Microsoft.EntityFrameworkCore",
         "Npgsql",
-        "Microsoft.Extensions.Hosting"
+        "Microsoft.Extensions.Hosting",
+        "Microsoft.IdentityModel"
     ];
 
     [Theory]
@@ -77,6 +78,22 @@ public sealed class FrameworkLeakageTests
 
         Assert.Equal("Microsoft.NET.Sdk", project.Sdk);
         Assert.Empty(project.FrameworkReferences);
+    }
+
+    [Fact]
+    public void Infrastructure_IsTheOnlyLayerHoldingTheTokenLibrary()
+    {
+        // Access tokens are issued and validated behind IAccessTokenGenerator and
+        // IAccessTokenValidator. The JWT library anywhere else would mean a caller could read a
+        // claim directly — and the claim most likely to be read is one the token deliberately does
+        // not carry, which is how authorization ends up back inside the token.
+        var holders = BackendLayout.SourceProjects
+            .Where(static project => project.PackageReferences.Any(static package =>
+                package.StartsWith("Microsoft.IdentityModel", StringComparison.Ordinal)))
+            .Select(static project => project.Name)
+            .ToList();
+
+        Assert.Equal(["MaintOrbit.Infrastructure"], holders);
     }
 
     [Fact]

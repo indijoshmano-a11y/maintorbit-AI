@@ -22,14 +22,14 @@ public sealed class PersistenceValidationWiringTests
     private static IOptions<PersistenceOptions> ResolveOptions(string connectionString)
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(TestJwtConfiguration.With(new Dictionary<string, string?>
             {
                 ["Application:Name"] = "MaintOrbit AI",
                 ["Application:PublicBaseUrl"] = "https://api.example.test",
                 ["Cors:AllowCredentials"] = "true",
                 ["Cors:AllowedOrigins:0"] = "https://console.example.test",
                 ["Persistence:ConnectionString"] = connectionString
-            })
+            }))
             .Build();
 
         var services = new ServiceCollection();
@@ -80,10 +80,10 @@ public sealed class PersistenceValidationWiringTests
         // validator with AddSingleton rather than TryAddSingleton means a duplicate call adds
         // it twice. Validating twice is harmless; not validating at all is not.
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(TestJwtConfiguration.With(new Dictionary<string, string?>
             {
                 ["Persistence:ConnectionString"] = "Host=localhost;Database=m;Username=u;Multiplexing=true"
-            })
+            }))
             .Build();
 
         var services = new ServiceCollection();

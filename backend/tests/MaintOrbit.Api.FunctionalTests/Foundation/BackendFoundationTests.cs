@@ -34,7 +34,11 @@ public sealed class BackendFoundationTests : IClassFixture<WebApplicationFactory
         ArgumentNullException.ThrowIfNull(factory);
 
         _factory = factory.WithWebHostBuilder(static builder =>
-            builder.UseEnvironment(EnvironmentNames.Development));
+        {
+            builder.UseEnvironment(EnvironmentNames.Development);
+            builder.ConfigureAppConfiguration(configuration =>
+                configuration.AddInMemoryCollection(TestJwtConfiguration.Settings));
+        });
     }
 
     // ---- Gate 1: the application starts -----------------------------------------------------
@@ -88,7 +92,12 @@ public sealed class BackendFoundationTests : IClassFixture<WebApplicationFactory
         // development conveniences switch off, production hardening never switches on, and
         // nothing reports a problem.
         using var misconfigured = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(static builder => builder.UseEnvironment("Prod"));
+            .WithWebHostBuilder(static builder =>
+            {
+                builder.UseEnvironment("Prod");
+                builder.ConfigureAppConfiguration(configuration =>
+                    configuration.AddInMemoryCollection(TestJwtConfiguration.Settings));
+            });
 
         var failure = Assert.ThrowsAny<Exception>(() => misconfigured.CreateClient());
 
@@ -206,7 +215,10 @@ public sealed class BackendFoundationTests : IClassFixture<WebApplicationFactory
         {
             builder.UseEnvironment(EnvironmentNames.Development);
             builder.ConfigureAppConfiguration(configuration =>
-                configuration.AddInMemoryCollection(settings));
+            {
+                configuration.AddInMemoryCollection(TestJwtConfiguration.Settings);
+                configuration.AddInMemoryCollection(settings);
+            });
         });
     }
 

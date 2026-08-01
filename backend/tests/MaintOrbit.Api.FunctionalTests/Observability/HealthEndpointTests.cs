@@ -2,6 +2,7 @@ using System.Net;
 using MaintOrbit.Shared.Constants;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 
 namespace MaintOrbit.Api.FunctionalTests.Observability;
 
@@ -24,7 +25,14 @@ public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Pr
         ArgumentNullException.ThrowIfNull(factory);
 
         _factory = factory.WithWebHostBuilder(builder =>
-            builder.UseEnvironment(EnvironmentNames.Development));
+        {
+            builder.UseEnvironment(EnvironmentNames.Development);
+
+            // The signing key has no default and is validated at startup, so the host cannot
+            // start without one. Generated per assembly, never committed.
+            builder.ConfigureAppConfiguration(configuration =>
+                configuration.AddInMemoryCollection(TestJwtConfiguration.Settings));
+        });
     }
 
     [Fact]

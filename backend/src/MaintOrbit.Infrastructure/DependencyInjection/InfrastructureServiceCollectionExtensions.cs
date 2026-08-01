@@ -49,6 +49,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddPersistence(services, configuration);
         AddPasswordHashing(services, configuration);
         AddRepositories(services);
+        AddAccessTokens(services, configuration);
 
         return services;
     }
@@ -108,6 +109,36 @@ public static class InfrastructureServiceCollectionExtensions
             builder.AddInterceptors(
                 new TenantConnectionInterceptor(provider.GetRequiredService<ITenantContext>()));
         });
+    }
+
+    /// <summary>
+    /// Registers access token issuance and validation.
+    /// </summary>
+    /// <remarks>
+    /// All singletons. The key ring imports its RSA keys once — creating an <c>RSA</c> instance is
+    /// expensive and the same key serves every request, so a per-request import would put a
+    /// keypair parse on the authentication path. The generator and validator hold no per-request
+    /// state and read their settings through <c>IOptions</c>.
+    /// <para>
+    /// Registered against the ports (DI-6), so nothing outside this assembly can reach the JWT
+    /// library — which is what lets the token format change without a caller noticing.
+    /// </para>
+    /// </remarks>
+    private static void AddAccessTokens(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton: ValidateDataAnnotations has already registered an
+        // IValidateOptions<JwtOptions>, and TryAdd would see the service type as present and
+        // silently do nothing — leaving the key checks unenforced.
+        services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
+
+        services.TryAddSingleton<SigningKeyRing>();
+        services.TryAddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
+        services.TryAddSingleton<IAccessTokenValidator, JwtAccessTokenValidator>();
     }
 
     /// <summary>

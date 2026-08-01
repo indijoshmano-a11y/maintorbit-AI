@@ -20,7 +20,7 @@ public sealed class ServiceRegistrationTests
 {
     private static IConfiguration Configuration() =>
         new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+            .AddInMemoryCollection(TestJwtConfiguration.With(new Dictionary<string, string?>
             {
                 ["Application:Name"] = "MaintOrbit AI",
                 ["Application:PublicBaseUrl"] = "https://api.example.test",
@@ -28,7 +28,7 @@ public sealed class ServiceRegistrationTests
                 ["Cors:AllowedOrigins:0"] = "https://console.example.test",
                 ["Persistence:ConnectionString"] =
                     "Host=localhost;Database=maintorbit_test;Username=maintorbit"
-            })
+            }))
             .Build();
 
     private static ServiceCollection Compose()
@@ -165,13 +165,16 @@ public sealed class ServiceRegistrationTests
     {
         // DI-6: register against the abstraction so a caller cannot depend on an implementation
         // detail by accident. Concrete self-registration is permitted where the concrete type is
-        // the contract — DbContext and the middleware the pipeline activates by type.
+        // the contract — DbContext, and the signing key ring, which is an internal detail shared
+        // by the token generator and validator rather than a port anything outside them uses.
         var selfRegistered = OwnedBy(Compose())
             .Where(static descriptor => descriptor.ServiceType == descriptor.ImplementationType)
             .Select(static descriptor => descriptor.ServiceType.Name)
             .ToList();
 
-        Assert.Equal(["MaintOrbitDbContext"], selfRegistered);
+        Assert.Equal(
+            ["MaintOrbitDbContext", "SigningKeyRing"],
+            selfRegistered.Order(StringComparer.Ordinal));
     }
 
     private static ParameterInfo[] Constructor(Type type) =>

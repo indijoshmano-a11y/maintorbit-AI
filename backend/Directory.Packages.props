@@ -73,6 +73,17 @@
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 
+  <!--
+    Access tokens. Microsoft.IdentityModel.JsonWebTokens is the library that
+    Microsoft.AspNetCore.Authentication.JwtBearer - the package backend-technologies §7 lists
+    for bearer token validation - is built on and already brings transitively. It is referenced
+    directly so token issuance and validation carry no dependency on ASP.NET Core: the bearer
+    middleware belongs to the API host, in the milestone that adds it.
+  -->
+  <ItemGroup Label="Authentication">
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
