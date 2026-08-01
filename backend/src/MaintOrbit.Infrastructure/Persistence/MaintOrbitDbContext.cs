@@ -48,6 +48,12 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     /// </remarks>
     public DbSet<EmployeeCredential> EmployeeCredentials => Set<EmployeeCredential>();
 
+    /// <summary>Device-scoped authenticated sessions (SD-016).</summary>
+    public DbSet<Session> Sessions => Set<Session>();
+
+    /// <summary>Refresh tokens — C4, stored only as hashes (SD-014).</summary>
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     /// <summary>
     /// Registers value-object conversions before the model is discovered.
     /// </summary>
@@ -71,6 +77,19 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
         configurationBuilder.Properties<PasswordHash>()
             .HaveConversion<ValueObjectConverters.PasswordHashConverter>()
             .HaveMaxLength(PasswordHash.MaxLength);
+
+        configurationBuilder.Properties<SessionId>()
+            .HaveConversion<ValueObjectConverters.SessionIdConverter>();
+
+        configurationBuilder.Properties<RefreshTokenId>()
+            .HaveConversion<ValueObjectConverters.RefreshTokenIdConverter>();
+
+        configurationBuilder.Properties<RefreshTokenFamilyId>()
+            .HaveConversion<ValueObjectConverters.RefreshTokenFamilyIdConverter>();
+
+        configurationBuilder.Properties<RefreshTokenHash>()
+            .HaveConversion<ValueObjectConverters.RefreshTokenHashConverter>()
+            .HaveMaxLength(RefreshTokenHash.Length);
 
         configurationBuilder.Properties<CompanyId>()
             .HaveConversion<ValueObjectConverters.CompanyIdConverter>();

@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace MaintOrbit.Infrastructure.Persistence.Conventions;
 
@@ -75,7 +76,14 @@ public static class NamingConventions
 
         foreach (var index in entityType.GetIndexes())
         {
-            index.SetDatabaseName(IndexName(entityType, index));
+            // Only name indexes that were not named explicitly. §1.5 gives a third form for
+            // partial indexes — ix_<table>_<columns>_<predicate>, as in
+            // ix_sessions_employee_id_active — which cannot be derived from the columns alone,
+            // so a configuration that states a name must win over the generated one.
+            if (index.FindAnnotation(RelationalAnnotationNames.Name) is null)
+            {
+                index.SetDatabaseName(IndexName(entityType, index));
+            }
         }
     }
 

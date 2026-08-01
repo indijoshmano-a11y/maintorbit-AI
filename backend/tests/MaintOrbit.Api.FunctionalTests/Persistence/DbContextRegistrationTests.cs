@@ -106,7 +106,9 @@ public sealed class DbContextRegistrationTests
         Assert.Equal(
             [
                 "MaintOrbit.Domain.Modules.Identity.Entities.Employee",
-                "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeCredential"
+                "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeCredential",
+                "MaintOrbit.Domain.Modules.Identity.Entities.RefreshToken",
+                "MaintOrbit.Domain.Modules.Identity.Entities.Session"
             ],
             context.Model.GetEntityTypes().Select(entity => entity.Name).Order(StringComparer.Ordinal));
     }

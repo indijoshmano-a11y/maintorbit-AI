@@ -1,5 +1,6 @@
 using MaintOrbit.Application.Abstractions.Persistence;
 using MaintOrbit.Application.Abstractions.Security;
+using MaintOrbit.Application.Common.Configuration;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
@@ -50,6 +51,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddPasswordHashing(services, configuration);
         AddRepositories(services);
         AddAccessTokens(services, configuration);
+        AddSessions(services, configuration);
 
         return services;
     }
@@ -112,6 +114,32 @@ public static class InfrastructureServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers session and refresh token settings and the token factory.
+    /// </summary>
+    /// <remarks>
+    /// The factory is a singleton: it holds no per-request state, reads its settings through
+    /// <c>IOptions</c>, and its only dependency is the system random number generator.
+    /// </remarks>
+    private static void AddSessions(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<SessionOptions>()
+            .Bind(configuration.GetSection(SessionOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton: ValidateDataAnnotations has already registered an
+        // IValidateOptions<SessionOptions>, so TryAdd would silently do nothing.
+        services.AddSingleton<IValidateOptions<SessionOptions>, SessionOptionsValidator>();
+
+        services.AddOptions<RefreshTokenOptions>()
+            .Bind(configuration.GetSection(RefreshTokenOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.TryAddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
+    }
+
+    /// <summary>
     /// Registers access token issuance and validation.
     /// </summary>
     /// <remarks>
@@ -163,6 +191,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.TryAddScoped<IUnitOfWork, UnitOfWork>();
         services.TryAddScoped<IEmployeeRepository, EmployeeRepository>();
         services.TryAddScoped<IEmployeeCredentialRepository, EmployeeCredentialRepository>();
+        services.TryAddScoped<ISessionRepository, SessionRepository>();
+        services.TryAddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
     }
 
     /// <summary>

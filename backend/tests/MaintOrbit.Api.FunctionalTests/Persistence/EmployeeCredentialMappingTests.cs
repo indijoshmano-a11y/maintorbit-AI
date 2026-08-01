@@ -131,26 +131,27 @@ public sealed class EmployeeCredentialMappingTests
     // ---- Migration ----------------------------------------------------------------------------
 
     [Fact]
-    public void ExactlyTwoMigrationsExist()
+    public void MigrationsIncludeTheCredentialTable()
     {
         using var context = new DesignTimeDbContextFactory().CreateDbContext([]);
 
         var migrations = context.Database.GetMigrations().ToList();
 
-        Assert.Equal(2, migrations.Count);
-        Assert.EndsWith("EmployeeCredentials", migrations[^1], StringComparison.Ordinal);
+        Assert.Equal(3, migrations.Count);
+        Assert.Contains(migrations, m => m.EndsWith("EmployeeCredentials", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void Migration_CreatesOnlyTheCredentialTable()
+    public void Migrations_CreateNoIdentityTableBeyondThoseBuiltSoFar()
     {
-        // "Generate only the migration for employee_credentials. Nothing else."
+        // The script is cumulative, so this widens as milestones land. What it still excludes is
+        // what has not been built.
         var sql = Script();
 
         foreach (var absent in new[]
                  {
-                     "sessions", "mfa_enrollments", "mfa_recovery_codes", "federated_identities",
-                     "refresh_tokens", "platform_api_keys", "permissions", "companies"
+                     "mfa_enrollments", "mfa_recovery_codes", "federated_identities",
+                     "platform_api_keys", "permissions", "companies"
                  })
         {
             Assert.DoesNotContain(absent, sql, StringComparison.Ordinal);
@@ -186,7 +187,9 @@ public sealed class EmployeeCredentialMappingTests
         var policy = Script();
         var occurrences = policy.Split(TenantSession.CurrentCompanyExpression).Length - 1;
 
-        // Two tables, each with USING and WITH CHECK.
-        Assert.Equal(4, occurrences);
+        // Four tenant-scoped tables, each with USING and WITH CHECK. Every one of them is a policy
+        // that would silently return zero rows if its predicate drifted from what sets the
+        // variable.
+        Assert.Equal(8, occurrences);
     }
 }

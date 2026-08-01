@@ -1,6 +1,7 @@
 using MaintOrbit.Application.Abstractions.Messaging;
 using MaintOrbit.Application.Modules.Identity.Commands.AcceptInvitation;
 using MaintOrbit.Application.Modules.Identity.Commands.Login;
+using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -39,6 +40,10 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             ICommandHandler<LoginCommand, AuthenticationResult>,
             LoginCommandHandler>();
+
+        services.TryAddScoped<
+            ICommandHandler<RotateRefreshTokenCommand, RefreshedTokens>,
+            RotateRefreshTokenCommandHandler>();
 
         return services;
     }

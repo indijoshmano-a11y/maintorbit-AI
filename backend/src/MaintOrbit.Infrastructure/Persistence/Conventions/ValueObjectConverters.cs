@@ -41,6 +41,24 @@ internal static class ValueObjectConverters
     internal sealed class PasswordHashConverter()
         : ValueConverter<PasswordHash, string>(hash => hash.Value, value => PasswordHash.Create(value));
 
+    /// <summary>Maps <see cref="SessionId"/> to <c>uuid</c>.</summary>
+    internal sealed class SessionIdConverter()
+        : ValueConverter<SessionId, Guid>(id => id.Value, value => new SessionId(value));
+
+    /// <summary>Maps <see cref="RefreshTokenId"/> to <c>uuid</c>.</summary>
+    internal sealed class RefreshTokenIdConverter()
+        : ValueConverter<RefreshTokenId, Guid>(id => id.Value, value => new RefreshTokenId(value));
+
+    /// <summary>Maps <see cref="RefreshTokenFamilyId"/> to <c>uuid</c>.</summary>
+    internal sealed class RefreshTokenFamilyIdConverter()
+        : ValueConverter<RefreshTokenFamilyId, Guid>(
+            id => id.Value, value => new RefreshTokenFamilyId(value));
+
+    /// <summary>Maps <see cref="RefreshTokenHash"/> to text. C4 material, unwrapped here only.</summary>
+    internal sealed class RefreshTokenHashConverter()
+        : ValueConverter<RefreshTokenHash, string>(
+            hash => hash.Value, value => RefreshTokenHash.Create(value));
+
     /// <summary>Maps <see cref="CompanyId"/> to <c>uuid</c>.</summary>
     internal sealed class CompanyIdConverter()
         : ValueConverter<CompanyId, Guid>(id => id.Value, value => new CompanyId(value));

@@ -34,10 +34,14 @@ public sealed class CompositionRootTests
         var configuration = ValidConfiguration();
 
         var services = new ServiceCollection();
+
+        // All four layers, matching Program.cs. Composing only three left ILogger<T> unregistered,
+        // which ValidateOnBuild caught the moment a handler took one — the check earning its keep.
         services
             .AddApplication()
             .AddInfrastructure(configuration)
-            .AddApi(configuration);
+            .AddApi(configuration)
+            .AddObservability(configuration);
 
         return services.BuildServiceProvider(options);
     }
@@ -65,8 +69,10 @@ public sealed class CompositionRootTests
         var configuration = ValidConfiguration();
 
         var services = new ServiceCollection();
-        services.AddApplication().AddInfrastructure(configuration).AddApi(configuration);
-        services.AddApplication().AddInfrastructure(configuration).AddApi(configuration);
+        services.AddApplication().AddInfrastructure(configuration).AddApi(configuration)
+            .AddObservability(configuration);
+        services.AddApplication().AddInfrastructure(configuration).AddApi(configuration)
+            .AddObservability(configuration);
 
         using var provider = services.BuildServiceProvider(ValidatingOptions);
 

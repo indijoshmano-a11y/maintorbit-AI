@@ -64,14 +64,14 @@ public sealed class MigrationTests
     }
 
     [Fact]
-    public void Script_CreatesNothingBeyondTheIdentityModel()
+    public void Script_CreatesNoIdentityTableBeyondThoseBuiltSoFar()
     {
-        // No credentials, sessions, permissions, or role tables — this milestone's stated scope.
+        // Cumulative across migrations. What remains listed is what has not been built.
         var sql = Script();
 
         foreach (var absent in new[]
                  {
-                     "sessions", "mfa_enrollments", "federated_identities",
+                     "mfa_enrollments", "federated_identities",
                      "permissions", "roles", "companies", "teams"
                  })
         {
