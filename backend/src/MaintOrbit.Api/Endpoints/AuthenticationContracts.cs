@@ -75,6 +75,61 @@ public sealed record RefreshRequest
     }
 }
 
+/// <summary>Password reset request (FR-AUTH-012).</summary>
+/// <remarks>
+/// Only an address. There is no Company field for the same reason sign-in has none, and no
+/// callback URL — a caller-supplied redirect is how a reset link gets pointed at somebody else's
+/// site with a live token attached.
+/// </remarks>
+public sealed record PasswordResetRequest
+{
+    /// <summary>The address to send the reset link to.</summary>
+    /// <remarks>
+    /// Length-bounded but not otherwise checked here. Whether it is well formed, and whether any
+    /// Employee holds it, must not change the response — see the endpoint.
+    /// </remarks>
+    [Required(AllowEmptyStrings = false)]
+    [StringLength(254, MinimumLength = 3)]
+    public string Email { get; init; } = string.Empty;
+}
+
+/// <summary>Password reset completion (FR-AUTH-012).</summary>
+/// <remarks>
+/// Carries both a live reset token and a plaintext password, so it does not print. A request
+/// object is exactly what gets logged when model binding or validation goes wrong.
+/// </remarks>
+[DebuggerDisplay("PasswordResetCompletion [REDACTED]")]
+public sealed record PasswordResetCompletion
+{
+    /// <summary>The token from the emailed link.</summary>
+    [Required(AllowEmptyStrings = false)]
+    [StringLength(512, MinimumLength = 16)]
+    public string Token { get; init; } = string.Empty;
+
+    /// <summary>The password to set.</summary>
+    /// <remarks>
+    /// Bounded only to stop an unbounded body reaching the hasher — Argon2id's cost is paid on
+    /// whatever it is given. Strength is a Company-configured policy (FR-AUTH-002) enforced when a
+    /// password is set, and lands with the validation pipeline.
+    /// </remarks>
+    [Required(AllowEmptyStrings = false)]
+    [StringLength(1024, MinimumLength = 1)]
+    public string NewPassword { get; init; } = string.Empty;
+
+    /// <inheritdoc />
+    public override string ToString() => "PasswordResetCompletion { [REDACTED] }";
+
+    [SuppressMessage("Performance", "CA1822:Mark members as static",
+        Justification = "PrintMembers is the record-generated member the compiler calls on an " +
+                        "instance; a static one would not be used and both secrets would print.")]
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Append("[REDACTED]");
+        return true;
+    }
+}
+
 /// <summary>Sign-in response.</summary>
 /// <remarks>
 /// Serialized camelCase (§1.6). <c>expiresAt</c> is the access token's expiry, so a client can

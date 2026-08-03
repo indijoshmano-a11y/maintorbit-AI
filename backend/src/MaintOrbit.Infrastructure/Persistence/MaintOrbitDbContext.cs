@@ -54,6 +54,9 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     /// <summary>Refresh tokens — C4, stored only as hashes (SD-014).</summary>
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    /// <summary>Password reset requests — C4, stored only as hashes (FR-AUTH-012).</summary>
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
     /// <summary>The atomic permission catalogue — platform-wide reference data (§4.2).</summary>
     public DbSet<Permission> Permissions => Set<Permission>();
 
@@ -102,6 +105,13 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
         configurationBuilder.Properties<RefreshTokenHash>()
             .HaveConversion<ValueObjectConverters.RefreshTokenHashConverter>()
             .HaveMaxLength(RefreshTokenHash.Length);
+
+        configurationBuilder.Properties<PasswordResetTokenId>()
+            .HaveConversion<ValueObjectConverters.PasswordResetTokenIdConverter>();
+
+        configurationBuilder.Properties<PasswordResetTokenHash>()
+            .HaveConversion<ValueObjectConverters.PasswordResetTokenHashConverter>()
+            .HaveMaxLength(PasswordResetTokenHash.Length);
 
         configurationBuilder.Properties<PermissionCode>()
             .HaveConversion<ValueObjectConverters.PermissionCodeConverter>()

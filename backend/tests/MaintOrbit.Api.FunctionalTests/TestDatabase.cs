@@ -21,7 +21,16 @@ internal static class TestDatabase
     private static string Administrative =>
         $"Host=localhost;Port=5432;Database=postgres;Username={Owner}";
 
-    private static readonly string DatabaseName =
+    /// <summary>
+    /// A fresh name per call.
+    /// </summary>
+    /// <remarks>
+    /// <b>Per call, not per assembly.</b> A single shared name looks harmless while one test class
+    /// uses it and turns into two classes creating and dropping the same database underneath each
+    /// other the moment a second one appears — which surfaces as unrelated connection failures
+    /// scattered across the suite rather than as a collision.
+    /// </remarks>
+    private static string NewDatabaseName() =>
         $"maintorbit_e2e_{Guid.CreateVersion7():n}"[..40];
 
     private static string Owner => Environment.UserName;
@@ -35,11 +44,13 @@ internal static class TestDatabase
 
             await connection.OpenAsync().ConfigureAwait(false);
 
+            var databaseName = NewDatabaseName();
+
             await using var command = new NpgsqlCommand(
-                $"CREATE DATABASE {DatabaseName}", connection);
+                $"CREATE DATABASE {databaseName}", connection);
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
 
-            return $"Host=localhost;Port=5432;Database={DatabaseName};Username={Owner}";
+            return $"Host=localhost;Port=5432;Database={databaseName};Username={Owner}";
         }
         catch (NpgsqlException)
         {
@@ -53,9 +64,27 @@ internal static class TestDatabase
         }
     }
 
-    /// <summary>Drops the database, ignoring failure — it is a scratch artefact.</summary>
-    public static async Task DropAsync()
+    /// <summary>
+    /// Drops the database the given connection string names, ignoring failure.
+    /// </summary>
+    /// <remarks>
+    /// Takes the connection string rather than reading a shared field, so a class can only ever
+    /// drop the database it created. Null is the "no server was reachable" case and does nothing.
+    /// </remarks>
+    public static async Task DropAsync(string? connectionString)
     {
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var databaseName = new NpgsqlConnectionStringBuilder(connectionString).Database;
+
+        if (string.IsNullOrEmpty(databaseName))
+        {
+            return;
+        }
+
         try
         {
             NpgsqlConnection.ClearAllPools();
@@ -65,7 +94,7 @@ internal static class TestDatabase
             await connection.OpenAsync().ConfigureAwait(false);
 
             await using var command = new NpgsqlCommand(
-                $"DROP DATABASE IF EXISTS {DatabaseName} WITH (FORCE)", connection);
+                $"DROP DATABASE IF EXISTS {databaseName} WITH (FORCE)", connection);
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
         catch (NpgsqlException)

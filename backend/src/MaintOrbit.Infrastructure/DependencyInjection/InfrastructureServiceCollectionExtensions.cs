@@ -6,7 +6,9 @@ using MaintOrbit.Application.Common.Configuration;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
+using MaintOrbit.Application.Abstractions.Notifications;
 using MaintOrbit.Infrastructure.MultiTenancy;
+using MaintOrbit.Infrastructure.Notifications;
 using MaintOrbit.Infrastructure.Persistence;
 using MaintOrbit.Infrastructure.Persistence.Interceptors;
 using MaintOrbit.Infrastructure.Telemetry;
@@ -55,6 +57,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddAccessTokens(services, configuration);
         AddSessions(services, configuration);
         AddAuthorization(services);
+        AddPasswordReset(services, configuration);
 
         return services;
     }
@@ -151,6 +154,30 @@ public static class InfrastructureServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers password reset token issuance and the notification seam (FR-AUTH-012).
+    /// </summary>
+    /// <remarks>
+    /// The factory is a singleton: it holds no per-request state, reads its settings through
+    /// <c>IOptions</c>, and its only dependency is the system random number generator.
+    /// <para>
+    /// The notifier registered here <b>does not send mail</b> — see
+    /// <see cref="UndeliveredPasswordResetNotifier"/>. It is registered rather than omitted so the
+    /// handler composes and the gap is visible in the log, instead of the container failing at
+    /// startup for a port nothing can yet satisfy.
+    /// </para>
+    /// </remarks>
+    private static void AddPasswordReset(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<PasswordResetOptions>()
+            .Bind(configuration.GetSection(PasswordResetOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.TryAddSingleton<IPasswordResetTokenFactory, PasswordResetTokenFactory>();
+        services.TryAddSingleton<IPasswordResetNotifier, UndeliveredPasswordResetNotifier>();
+    }
+
+    /// <summary>
     /// Registers permission resolution.
     /// </summary>
     /// <remarks>
@@ -222,6 +249,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.TryAddScoped<ISessionRepository, SessionRepository>();
         services.TryAddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.TryAddScoped<IAuthorizationRepository, AuthorizationRepository>();
+        services.TryAddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
     }
 
     /// <summary>

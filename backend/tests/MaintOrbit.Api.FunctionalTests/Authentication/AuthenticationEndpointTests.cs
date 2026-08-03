@@ -42,18 +42,19 @@ public sealed class AuthenticationEndpointTests : IAsyncLifetime
     private readonly CompanyId _company = new(Guid.CreateVersion7());
     private IHost? _host;
     private string? _skip;
+    private string? _database;
 
     public async Task InitializeAsync()
     {
-        var database = await TestDatabase.CreateAsync().ConfigureAwait(false);
+        _database = await TestDatabase.CreateAsync().ConfigureAwait(false);
 
-        if (database is null)
+        if (_database is null)
         {
             _skip = "No PostgreSQL reachable.";
             return;
         }
 
-        _host = BuildHost(database);
+        _host = BuildHost(_database);
         _host.Start();
 
         await SeedActiveEmployeeAsync().ConfigureAwait(false);
@@ -62,7 +63,7 @@ public sealed class AuthenticationEndpointTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         _host?.Dispose();
-        await TestDatabase.DropAsync().ConfigureAwait(false);
+        await TestDatabase.DropAsync(_database).ConfigureAwait(false);
     }
 
     private static IHost BuildHost(string connectionString) =>

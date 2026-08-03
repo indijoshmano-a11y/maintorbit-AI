@@ -52,6 +52,17 @@ internal sealed class ElevatedCredentialDirectory(IOptions<PersistenceOptions> o
         LIMIT 1
         """;
 
+    /// <remarks>
+    /// No filter on consumed, invalidated, or expired: refusing a replayed link requires finding
+    /// it, and that decision belongs inside the tenant scope this call makes possible.
+    /// </remarks>
+    private const string CompanyByPasswordResetToken =
+        """
+        SELECT company_id FROM identity.password_reset_tokens
+        WHERE token_hash = $1
+        LIMIT 1
+        """;
+
     /// <inheritdoc />
     public Task<CompanyId?> FindCompanyByEmailAsync(Email email, CancellationToken cancellationToken)
     {
@@ -67,6 +78,15 @@ internal sealed class ElevatedCredentialDirectory(IOptions<PersistenceOptions> o
         ArgumentNullException.ThrowIfNull(tokenHash);
 
         return ResolveAsync(CompanyByRefreshToken, tokenHash.Value, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<CompanyId?> FindCompanyByPasswordResetTokenAsync(
+        PasswordResetTokenHash tokenHash, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(tokenHash);
+
+        return ResolveAsync(CompanyByPasswordResetToken, tokenHash.Value, cancellationToken);
     }
 
     private async Task<CompanyId?> ResolveAsync(

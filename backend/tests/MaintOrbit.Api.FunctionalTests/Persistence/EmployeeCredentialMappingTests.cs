@@ -137,7 +137,7 @@ public sealed class EmployeeCredentialMappingTests
 
         var migrations = context.Database.GetMigrations().ToList();
 
-        Assert.Equal(4, migrations.Count);
+        Assert.Equal(5, migrations.Count);
         Assert.Contains(migrations, m => m.EndsWith("EmployeeCredentials", StringComparison.Ordinal));
     }
 
@@ -187,9 +187,10 @@ public sealed class EmployeeCredentialMappingTests
         var policy = Script();
         var occurrences = policy.Split(TenantSession.CurrentCompanyExpression).Length - 1;
 
-        // Four tenant-scoped tables, each with USING and WITH CHECK. Every one of them is a policy
-        // that would silently return zero rows if its predicate drifted from what sets the
-        // variable.
-        Assert.Equal(10, occurrences);
+        // Six tenant-scoped tables, each with USING and WITH CHECK: employees,
+        // employee_credentials, sessions, refresh_tokens, employee_roles, and
+        // password_reset_tokens. Every one of them is a policy that would silently return zero
+        // rows if its predicate drifted from what sets the variable.
+        Assert.Equal(12, occurrences);
     }
 }

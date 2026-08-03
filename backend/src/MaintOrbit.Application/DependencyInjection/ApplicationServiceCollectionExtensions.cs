@@ -1,5 +1,7 @@
 using MaintOrbit.Application.Abstractions.Messaging;
 using MaintOrbit.Application.Modules.Identity.Commands.AcceptInvitation;
+using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
+using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.Login;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
@@ -54,6 +56,14 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             ICommandHandler<SignInCommand, SignInResult>,
             SignInCommandHandler>();
+
+        services.TryAddScoped<
+            ICommandHandler<RequestPasswordResetCommand>,
+            RequestPasswordResetCommandHandler>();
+
+        services.TryAddScoped<
+            ICommandHandler<CompletePasswordResetCommand>,
+            CompletePasswordResetCommandHandler>();
 
         services.TryAddScoped<ICommandHandler<SignOutCommand>, SignOutCommandHandler>();
         services.TryAddScoped<

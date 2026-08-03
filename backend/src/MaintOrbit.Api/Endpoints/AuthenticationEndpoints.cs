@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using MaintOrbit.Api.Configuration;
 using MaintOrbit.Application.Abstractions.Messaging;
+using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
+using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
 using MaintOrbit.Application.Modules.Identity.Commands.SignOut;
@@ -42,6 +44,12 @@ public static class AuthenticationEndpoints
 
         group.MapPost("/login", SignInAsync);
         group.MapPost("/refresh", RefreshAsync);
+
+        // Unauthenticated by necessity: an Employee who has forgotten their password cannot
+        // present one, and requiring a session would make the flow reachable only by people who
+        // do not need it.
+        group.MapPost("/password-reset/request", RequestPasswordResetAsync);
+        group.MapPost("/password-reset/complete", CompletePasswordResetAsync);
 
         // Sign-out ends the session the caller presented, so it must have presented one.
         group.MapPost("/logout", SignOutAsync).RequireAuthorization();
@@ -102,6 +110,76 @@ public static class AuthenticationEndpoints
                 result.Value.RefreshToken,
                 result.Value.AccessToken.ExpiresAtUtc))
             : Problem(context, result.Error, StatusCodes.Status401Unauthorized);
+    }
+
+    /// <summary>
+    /// Asks for a reset link, and answers the same way regardless (FR-AUTH-012).
+    /// </summary>
+    /// <remarks>
+    /// <b>Always <c>202 Accepted</c>.</b> §7 lists 202 for an asynchronous operation, which this
+    /// is — the work that matters happens in a message the caller cannot observe. The status, the
+    /// body, and the headers are identical whether the address belongs to an Employee or to
+    /// nobody, because any difference is an account-enumeration oracle reachable without a
+    /// credential.
+    /// <para>
+    /// A malformed address still returns 202 rather than 400. Validating the shape here would
+    /// answer "is this even an address?", which is a smaller leak than the account check but the
+    /// same kind — and one an attacker can use to clean a list before probing it.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> RequestPasswordResetAsync(
+        PasswordResetRequest request,
+        HttpContext context,
+        ICommandHandler<RequestPasswordResetCommand> handler,
+        CancellationToken cancellationToken)
+    {
+        await handler.HandleAsync(
+            new RequestPasswordResetCommand(
+                request.Email,
+                // Server-observed, never taken from the body. A caller-supplied address would be
+                // a caller writing their own entry in somebody's recovery history.
+                context.Connection.RemoteIpAddress?.ToString()),
+            cancellationToken).ConfigureAwait(false);
+
+        // The handler cannot fail, and the endpoint does not inspect the result — reading it
+        // would create somewhere for a future difference to leak out of.
+        return Results.Accepted();
+    }
+
+    /// <summary>Redeems a reset link and sets the new password.</summary>
+    /// <remarks>
+    /// A missing field is <c>400 validation_failed</c> and says nothing about any account. Every
+    /// other failure — unknown, expired, already used, superseded — is one <c>401</c> with one
+    /// description, because telling them apart tells whoever is probing which of their guesses
+    /// was a real token.
+    /// </remarks>
+    private static async Task<IResult> CompletePasswordResetAsync(
+        PasswordResetCompletion request,
+        HttpContext context,
+        ICommandHandler<CompletePasswordResetCommand> handler,
+        CancellationToken cancellationToken)
+    {
+        if (Validate(request) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var result = await handler.HandleAsync(
+            new CompletePasswordResetCommand(request.Token, request.NewPassword),
+            cancellationToken).ConfigureAwait(false);
+
+        if (result.IsSuccess)
+        {
+            return Results.NoContent();
+        }
+
+        // §7 maps validation_failed to 400 and authentication_failed to 401. The handler chooses
+        // which; the endpoint only carries the documented status for the code it was given.
+        var status = result.Error.Code == "validation_failed"
+            ? StatusCodes.Status400BadRequest
+            : StatusCodes.Status401Unauthorized;
+
+        return Problem(context, result.Error, status);
     }
 
     private static async Task<IResult> SignOutAsync(
@@ -189,12 +267,19 @@ public static class AuthenticationEndpoints
     }
 
     /// <summary>Writes the documented error envelope (§4.3).</summary>
+    /// <remarks>
+    /// The title comes from the error code rather than being fixed, because this now serves two:
+    /// a reset completion missing a field is a validation failure, and calling it "Authentication
+    /// failed" would misdescribe it to every client that renders the title.
+    /// </remarks>
     private static IResult Problem(HttpContext context, Error error, int statusCode)
     {
         var problem = new ProblemDetails
         {
             Type = error.Code,
-            Title = "Authentication failed",
+            Title = error.Code == "validation_failed"
+                ? "The request is not valid"
+                : "Authentication failed",
             Status = statusCode,
             Detail = error.Description
         };

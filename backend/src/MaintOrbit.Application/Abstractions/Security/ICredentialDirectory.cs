@@ -46,4 +46,20 @@ public interface ICredentialDirectory
     /// </remarks>
     Task<CompanyId?> FindCompanyByRefreshTokenAsync(
         RefreshTokenHash tokenHash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The Company a password reset token belongs to, or <see langword="null"/> if no such token
+    /// exists.
+    /// </summary>
+    /// <remarks>
+    /// Completing a reset has the same chicken-and-egg problem as sign-in: the request carries a
+    /// token and nothing else, and row-level security needs a Company before the row is visible.
+    /// <para>
+    /// Returns the Company for consumed, invalidated, and expired tokens too. Refusing a replayed
+    /// link is only possible if the row can be found, and filtering here would turn a replay into
+    /// "unknown token" — the same answer as a typo.
+    /// </para>
+    /// </remarks>
+    Task<CompanyId?> FindCompanyByPasswordResetTokenAsync(
+        PasswordResetTokenHash tokenHash, CancellationToken cancellationToken);
 }

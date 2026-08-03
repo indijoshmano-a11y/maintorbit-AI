@@ -59,6 +59,18 @@ internal static class ValueObjectConverters
         : ValueConverter<RefreshTokenHash, string>(
             hash => hash.Value, value => RefreshTokenHash.Create(value));
 
+    /// <summary>Maps <see cref="PasswordResetTokenId"/> to <c>uuid</c>.</summary>
+    internal sealed class PasswordResetTokenIdConverter()
+        : ValueConverter<PasswordResetTokenId, Guid>(
+            id => id.Value, value => new PasswordResetTokenId(value));
+
+    /// <summary>
+    /// Maps <see cref="PasswordResetTokenHash"/> to text. C4 material, unwrapped here only.
+    /// </summary>
+    internal sealed class PasswordResetTokenHashConverter()
+        : ValueConverter<PasswordResetTokenHash, string>(
+            hash => hash.Value, value => PasswordResetTokenHash.Create(value));
+
     /// <summary>Maps <see cref="PermissionCode"/> to text — the key itself (§1.6).</summary>
     internal sealed class PermissionCodeConverter()
         : ValueConverter<PermissionCode, string>(

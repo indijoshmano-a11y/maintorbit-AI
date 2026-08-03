@@ -222,4 +222,51 @@ public sealed class EmployeeCredential
             UpdatedByEmployeeId = establishedBy
         };
     }
+
+    /// <summary>
+    /// Replaces the stored password.
+    /// </summary>
+    /// <remarks>
+    /// The transition FR-AUTH-012 needs, and the only one that writes
+    /// <see cref="PasswordHash"/> after the credential exists. Like <see cref="Establish"/> it
+    /// takes an already-derived hash and never a plaintext.
+    /// <para>
+    /// <b>It clears the lockout state.</b> A reset completed through a token delivered to the
+    /// verified address is proof of control of the account, and leaving FR-AUTH-011's counter
+    /// standing would lock the holder out of the password they just set — turning the lockout
+    /// into the denial-of-service vector 07-api-security T-3 warns it can become.
+    /// </para>
+    /// <para>
+    /// Ending the Employee's sessions (NFR-SEC-017) is <i>not</i> done here. Sessions are a
+    /// different aggregate; this one records that the password changed and when, and the caller
+    /// revokes in the same transaction.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">The parameters are blank or the version is not
+    /// positive.</exception>
+    public void ChangePassword(
+        PasswordHash passwordHash,
+        PasswordAlgorithm algorithm,
+        int passwordVersion,
+        string hashParameters,
+        DateTimeOffset changedAtUtc,
+        EmployeeId? changedBy = null)
+    {
+        ArgumentNullException.ThrowIfNull(passwordHash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hashParameters);
+        ArgumentOutOfRangeException.ThrowIfLessThan(passwordVersion, 1);
+
+        PasswordHash = passwordHash;
+        Algorithm = algorithm;
+        PasswordVersion = passwordVersion;
+        HashParameters = hashParameters;
+        PasswordChangedAtUtc = changedAtUtc;
+
+        RequirePasswordChange = false;
+        FailedLoginCount = 0;
+        LockoutUntilUtc = null;
+
+        UpdatedAtUtc = changedAtUtc;
+        UpdatedByEmployeeId = changedBy;
+    }
 }
