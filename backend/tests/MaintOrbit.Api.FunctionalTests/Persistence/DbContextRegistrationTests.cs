@@ -107,7 +107,11 @@ public sealed class DbContextRegistrationTests
             [
                 "MaintOrbit.Domain.Modules.Identity.Entities.Employee",
                 "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeCredential",
+                "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeRole",
+                "MaintOrbit.Domain.Modules.Identity.Entities.Permission",
                 "MaintOrbit.Domain.Modules.Identity.Entities.RefreshToken",
+                "MaintOrbit.Domain.Modules.Identity.Entities.RoleDefinition",
+                "MaintOrbit.Domain.Modules.Identity.Entities.RolePermission",
                 "MaintOrbit.Domain.Modules.Identity.Entities.Session"
             ],
             context.Model.GetEntityTypes().Select(entity => entity.Name).Order(StringComparer.Ordinal));

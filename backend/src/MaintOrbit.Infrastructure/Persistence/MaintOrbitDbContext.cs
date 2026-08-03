@@ -54,6 +54,18 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     /// <summary>Refresh tokens — C4, stored only as hashes (SD-014).</summary>
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    /// <summary>The atomic permission catalogue — platform-wide reference data (§4.2).</summary>
+    public DbSet<Permission> Permissions => Set<Permission>();
+
+    /// <summary>Role definitions — seven fixed now, customer-composed at v2.0 (FR-PERM-006).</summary>
+    public DbSet<RoleDefinition> RoleDefinitions => Set<RoleDefinition>();
+
+    /// <summary>Which permissions each role grants.</summary>
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+
+    /// <summary>Which roles an Employee holds, and at what scope — tenant-scoped.</summary>
+    public DbSet<EmployeeRole> EmployeeRoles => Set<EmployeeRole>();
+
     /// <summary>
     /// Registers value-object conversions before the model is discovered.
     /// </summary>
@@ -90,6 +102,14 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
         configurationBuilder.Properties<RefreshTokenHash>()
             .HaveConversion<ValueObjectConverters.RefreshTokenHashConverter>()
             .HaveMaxLength(RefreshTokenHash.Length);
+
+        configurationBuilder.Properties<PermissionCode>()
+            .HaveConversion<ValueObjectConverters.PermissionCodeConverter>()
+            .HaveMaxLength(PermissionCode.MaxLength);
+
+        configurationBuilder.Properties<RoleCode>()
+            .HaveConversion<ValueObjectConverters.RoleCodeConverter>()
+            .HaveMaxLength(RoleCode.MaxLength);
 
         configurationBuilder.Properties<CompanyId>()
             .HaveConversion<ValueObjectConverters.CompanyIdConverter>();

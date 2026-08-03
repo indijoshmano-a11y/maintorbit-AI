@@ -59,6 +59,15 @@ internal static class ValueObjectConverters
         : ValueConverter<RefreshTokenHash, string>(
             hash => hash.Value, value => RefreshTokenHash.Create(value));
 
+    /// <summary>Maps <see cref="PermissionCode"/> to text — the key itself (§1.6).</summary>
+    internal sealed class PermissionCodeConverter()
+        : ValueConverter<PermissionCode, string>(
+            code => code.Value, value => PermissionCode.Create(value));
+
+    /// <summary>Maps <see cref="RoleCode"/> to text.</summary>
+    internal sealed class RoleCodeConverter()
+        : ValueConverter<RoleCode, string>(code => code.Value, value => RoleCode.Create(value));
+
     /// <summary>Maps <see cref="CompanyId"/> to <c>uuid</c>.</summary>
     internal sealed class CompanyIdConverter()
         : ValueConverter<CompanyId, Guid>(id => id.Value, value => new CompanyId(value));

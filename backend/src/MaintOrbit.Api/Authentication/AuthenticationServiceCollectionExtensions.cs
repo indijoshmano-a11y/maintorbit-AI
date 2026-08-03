@@ -1,5 +1,7 @@
 using System.Text.Json;
+using MaintOrbit.Api.Authorization;
 using MaintOrbit.Application.Abstractions.Security;
+using Microsoft.AspNetCore.Authorization;
 using MaintOrbit.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
@@ -50,6 +52,11 @@ public static class AuthenticationServiceCollectionExtensions
         // — permission evaluation is its own milestone, and putting a placeholder policy here
         // would be a decision made before the thing it decides about exists.
         services.AddAuthorization();
+
+        // Derives a policy from any permission an endpoint declares, so declaring one is all there
+        // is to do — no startup list to keep in step with the endpoints it serves.
+        services.TryAddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+        services.TryAddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
         return services;
     }

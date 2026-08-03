@@ -1,4 +1,6 @@
+using MaintOrbit.Application.Abstractions.Authorization;
 using MaintOrbit.Application.Abstractions.Persistence;
+using MaintOrbit.Infrastructure.Authorization;
 using MaintOrbit.Application.Abstractions.Security;
 using MaintOrbit.Application.Common.Configuration;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
@@ -52,6 +54,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddRepositories(services);
         AddAccessTokens(services, configuration);
         AddSessions(services, configuration);
+        AddAuthorization(services);
 
         return services;
     }
@@ -148,6 +151,21 @@ public static class InfrastructureServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers permission resolution.
+    /// </summary>
+    /// <remarks>
+    /// Scoped, because resolution reads through the repository and therefore the request's tenant
+    /// scope. The cache is a singleton — it is meant to outlive a request, which is the whole
+    /// point — and the registered implementation holds nothing until Redis exists.
+    /// </remarks>
+    private static void AddAuthorization(IServiceCollection services)
+    {
+        services.TryAddSingleton<IPermissionCache, NoPermissionCache>();
+        services.TryAddScoped<IPermissionService, PermissionService>();
+        services.TryAddScoped<IAuthorizationEvaluator, AuthorizationEvaluator>();
+    }
+
+    /// <summary>
     /// Registers access token issuance and validation.
     /// </summary>
     /// <remarks>
@@ -203,6 +221,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.TryAddScoped<IEmployeeCredentialRepository, EmployeeCredentialRepository>();
         services.TryAddScoped<ISessionRepository, SessionRepository>();
         services.TryAddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.TryAddScoped<IAuthorizationRepository, AuthorizationRepository>();
     }
 
     /// <summary>

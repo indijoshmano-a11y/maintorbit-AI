@@ -72,7 +72,7 @@ public sealed class MigrationTests
         foreach (var absent in new[]
                  {
                      "mfa_enrollments", "federated_identities",
-                     "permissions", "roles", "companies", "teams"
+                     "companies", "teams"
                  })
         {
             Assert.DoesNotContain(absent, sql, StringComparison.Ordinal);

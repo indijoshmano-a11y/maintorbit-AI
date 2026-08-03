@@ -137,7 +137,7 @@ public sealed class EmployeeCredentialMappingTests
 
         var migrations = context.Database.GetMigrations().ToList();
 
-        Assert.Equal(3, migrations.Count);
+        Assert.Equal(4, migrations.Count);
         Assert.Contains(migrations, m => m.EndsWith("EmployeeCredentials", StringComparison.Ordinal));
     }
 
@@ -151,7 +151,7 @@ public sealed class EmployeeCredentialMappingTests
         foreach (var absent in new[]
                  {
                      "mfa_enrollments", "mfa_recovery_codes", "federated_identities",
-                     "platform_api_keys", "permissions", "companies"
+                     "platform_api_keys", "companies"
                  })
         {
             Assert.DoesNotContain(absent, sql, StringComparison.Ordinal);
@@ -190,6 +190,6 @@ public sealed class EmployeeCredentialMappingTests
         // Four tenant-scoped tables, each with USING and WITH CHECK. Every one of them is a policy
         // that would silently return zero rows if its predicate drifted from what sets the
         // variable.
-        Assert.Equal(8, occurrences);
+        Assert.Equal(10, occurrences);
     }
 }
