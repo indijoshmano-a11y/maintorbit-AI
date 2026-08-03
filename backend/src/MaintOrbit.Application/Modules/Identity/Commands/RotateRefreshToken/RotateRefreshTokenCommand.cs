@@ -31,6 +31,29 @@ public sealed record RotateRefreshTokenCommand(string PresentedToken)
     }
 }
 
+/// <summary>A refresh request as it arrives from a client, before any tenant is known.</summary>
+/// <remarks>
+/// Distinct from <see cref="RotateRefreshTokenCommand"/>, which assumes a tenant scope. The
+/// separation keeps the elevated Company lookup in one handler instead of inside the rotation
+/// logic, where it would be reachable by callers that already have a tenant.
+/// </remarks>
+[DebuggerDisplay("RefreshSessionCommand [REDACTED]")]
+public sealed record RefreshSessionCommand(string RefreshToken) : ICommand<RefreshedTokens>
+{
+    /// <inheritdoc />
+    public override string ToString() => "RefreshSessionCommand { [REDACTED] }";
+
+    [SuppressMessage("Performance", "CA1822:Mark members as static",
+        Justification = "PrintMembers is the record-generated member the compiler calls on an " +
+                        "instance; a static one would not be used and the token would print.")]
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Append("[REDACTED]");
+        return true;
+    }
+}
+
 /// <summary>The pair returned by a successful authentication or rotation.</summary>
 /// <remarks>
 /// The refresh token is plaintext and exists only here — it is hashed before storage and is

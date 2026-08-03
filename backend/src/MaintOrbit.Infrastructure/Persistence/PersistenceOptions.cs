@@ -30,6 +30,22 @@ public sealed class PersistenceOptions
     public string ConnectionString { get; init; } = string.Empty;
 
     /// <summary>
+    /// Connection used by the one path that reads across Companies.
+    /// </summary>
+    /// <remarks>
+    /// Optional, and points at a role permitted to see past row-level security. Only
+    /// <c>ICredentialDirectory</c> uses it, and only to resolve which Company a credential belongs
+    /// to — authentication cannot open a tenant scope before it knows the tenant.
+    /// <para>
+    /// When absent the ordinary connection is used. That is correct in development, where the
+    /// developer's own role already sees everything, and fail-closed in production: a properly
+    /// restricted application role returns no rows, so sign-in stops working visibly rather than
+    /// authenticating against the wrong tenant.
+    /// </para>
+    /// </remarks>
+    public string? ElevatedConnectionString { get; init; }
+
+    /// <summary>
     /// How long a single command may run before it is cancelled.
     /// </summary>
     /// <remarks>

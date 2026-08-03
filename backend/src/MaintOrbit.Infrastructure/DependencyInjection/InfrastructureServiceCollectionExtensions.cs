@@ -141,6 +141,10 @@ public static class InfrastructureServiceCollectionExtensions
         // Scoped: it reads a session through the repository, which shares the request's DbContext
         // and therefore the tenant scope the caller opened.
         services.TryAddScoped<ISessionValidator, SessionValidator>();
+
+        // The only path that reads across Companies (04-tenant-security §3.4). Singleton because
+        // it holds no state and opens its own connection per call.
+        services.TryAddSingleton<ICredentialDirectory, ElevatedCredentialDirectory>();
     }
 
     /// <summary>
