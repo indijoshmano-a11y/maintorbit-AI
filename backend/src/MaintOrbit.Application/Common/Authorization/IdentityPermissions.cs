@@ -28,4 +28,14 @@ public static class IdentityPermissions
     /// One code, two scopes — the scope is the endpoint's declaration, not a second permission.
     /// </remarks>
     public static PermissionCode EmployeeRead { get; } = PermissionCode.Create("employee.read");
+
+    /// <summary>
+    /// Manage Employees — <c>employee.manage</c> (§3.2).
+    /// </summary>
+    /// <remarks>
+    /// §3.2 gives it at Company scope, and also at Team scope for Team Leads. Assigning and
+    /// removing roles is management rather than reading: it changes what somebody else may do,
+    /// which is a strictly larger capability than seeing what they may do now.
+    /// </remarks>
+    public static PermissionCode EmployeeManage { get; } = PermissionCode.Create("employee.manage");
 }

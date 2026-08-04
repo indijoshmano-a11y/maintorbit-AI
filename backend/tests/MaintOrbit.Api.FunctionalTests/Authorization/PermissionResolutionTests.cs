@@ -279,5 +279,28 @@ public sealed class PermissionResolutionTests
                 Grants.Where(grant => roleCodes.Contains(grant.RoleCode)).ToList());
 
         public void Add(EmployeeRole assignment) => Assignments.Add(assignment);
+
+        public void Remove(EmployeeRole assignment) => Assignments.Remove(assignment);
+
+        public Task<EmployeeRole?> FindAssignmentAsync(
+            Guid assignmentId, CancellationToken cancellationToken) =>
+            Task.FromResult(Assignments.FirstOrDefault(role => role.Id == assignmentId));
+
+        public Task<bool> AssignmentExistsAsync(
+            EmployeeId employeeId,
+            RoleCode roleCode,
+            PermissionScope scopeType,
+            Guid? scopeId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(Assignments.Any(role =>
+                role.EmployeeId == employeeId &&
+                role.RoleCode == roleCode &&
+                role.ScopeType == scopeType &&
+                role.ScopeId == scopeId));
+
+        // Every role these tests name is treated as defined. Whether a role exists is asserted
+        // against the real catalogue by the assignment tests, which have a database.
+        public Task<bool> RoleExistsAsync(RoleCode roleCode, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
     }
 }

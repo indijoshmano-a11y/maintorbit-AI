@@ -2,11 +2,13 @@ using MaintOrbit.Application.Abstractions.Messaging;
 using MaintOrbit.Application.Modules.Identity.Commands.AcceptInvitation;
 using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
+using MaintOrbit.Application.Modules.Identity.Commands.EmployeeRoles;
 using MaintOrbit.Application.Modules.Identity.Commands.Login;
 using MaintOrbit.Application.Modules.Identity.Commands.Mfa;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
 using MaintOrbit.Application.Modules.Identity.Commands.SignOut;
+using MaintOrbit.Application.Modules.Identity.Queries.EmployeeRoles;
 using MaintOrbit.Application.Modules.Identity.Queries.Employees;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -90,6 +92,12 @@ public static class ApplicationServiceCollectionExtensions
             ICommandHandler<SignOutEverywhereCommand>,
             SignOutEverywhereCommandHandler>();
 
+        services.TryAddScoped<
+            ICommandHandler<AssignRoleCommand, AssignedRole>,
+            AssignRoleCommandHandler>();
+
+        services.TryAddScoped<ICommandHandler<RemoveRoleCommand>, RemoveRoleCommandHandler>();
+
         // Queries. Registered against IQueryHandler rather than ICommandHandler because ADR-0012
         // treats them differently — no write transaction, no outbox — and the dispatcher tells
         // them apart by the contract they implement.
@@ -100,6 +108,10 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             IQueryHandler<GetCurrentEmployeeQuery, EmployeeSummary>,
             GetCurrentEmployeeQueryHandler>();
+
+        services.TryAddScoped<
+            IQueryHandler<ListEmployeeRolesQuery, EmployeeRoleList>,
+            ListEmployeeRolesQueryHandler>();
 
         return services;
     }

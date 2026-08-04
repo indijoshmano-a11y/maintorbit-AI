@@ -139,8 +139,15 @@ internal sealed class EmployeeRoleConfiguration : IEntityTypeConfiguration<Emplo
 
         // One assignment of a role at a scope. A duplicate grants nothing extra and would appear
         // twice in every resolution.
+        //
+        // AreNullsDistinct(false) is what makes that true for the common case. PostgreSQL treats
+        // NULLs as distinct in a unique index by default, and scope_id is NULL for every
+        // Company- and Self-scoped assignment — so without this the constraint prevents duplicates
+        // only for Team scope, which is the rarest of the three. It looked correct and enforced
+        // almost nothing.
         builder.HasIndex(role => new { role.EmployeeId, role.RoleCode, role.ScopeType, role.ScopeId })
             .IsUnique()
+            .AreNullsDistinct(false)
             .HasDatabaseName("ux_employee_roles_employee_id_role_code_scope");
 
         builder.HasOne<Employee>()
