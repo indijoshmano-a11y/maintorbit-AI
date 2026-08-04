@@ -75,6 +75,19 @@
   </ItemGroup>
 
   <!--
+    Redis client. Named in docs/04-technology/backend-technologies.md §5.2 at 2.x and rated
+    green, and ADR-0006 selects Redis for the cache role, so this is an inventory package
+    rather than an addition - dependency-policy Gate 6 (named owner, technology inventory)
+    is already satisfied by that entry. Gate 1 self-hostable - Redis and the protocol-
+    compatible Valkey both self-host; Gate 2 licence - MIT; Gate 5 replaceability - the
+    client is confined to the caching infrastructure, and §5.2 records that a server change
+    to Valkey needs no client change.
+  -->
+  <ItemGroup Label="Caching">
+    <PackageVersion Include="StackExchange.Redis" Version="2.9.25" />
+  </ItemGroup>
+
+  <!--
     Access tokens. Microsoft.IdentityModel.JsonWebTokens is the library that
     Microsoft.AspNetCore.Authentication.JwtBearer - the package backend-technologies §7 lists
     for bearer token validation - is built on and already brings transitively. It is referenced

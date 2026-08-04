@@ -5,6 +5,7 @@ using MaintOrbit.Domain.Modules.Identity.Enums;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 using MaintOrbit.Infrastructure.Authorization;
+using MaintOrbit.Infrastructure.Caching;
 using MaintOrbit.Shared.MultiTenancy;
 
 namespace MaintOrbit.Api.FunctionalTests.Authorization;
@@ -38,7 +39,7 @@ public sealed class PermissionResolutionTests
     {
         public FakeAuthorizationRepository Repository { get; } = new();
 
-        public PermissionService Service() => new PermissionService(Repository, new NoPermissionCache());
+        public PermissionService Service() => new PermissionService(Repository, new DisabledPermissionCache());
 
         public Fixture Grant(RoleCode role, params PermissionCode[] permissions)
         {

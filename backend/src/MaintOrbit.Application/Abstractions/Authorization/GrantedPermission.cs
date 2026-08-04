@@ -44,6 +44,21 @@ public sealed class EmployeePermissions
     public IReadOnlyCollection<PermissionCode> Permissions => _byPermission.Keys;
 
     /// <summary>
+    /// Every grant, with its scope.
+    /// </summary>
+    /// <remarks>
+    /// Exposed for the cache, which has to write the whole set down and read it back — and a
+    /// round trip through <see cref="Permissions"/> alone would silently drop scope, turning
+    /// every Team- and Self-scoped grant into nothing on the way out of Redis.
+    /// <para>
+    /// Not for authorization decisions. Those go through <see cref="IsGranted"/>, which is where
+    /// §3.5's reach rule lives; enumerating grants at a call site to decide something is how that
+    /// rule ends up reimplemented slightly differently in two places.
+    /// </para>
+    /// </remarks>
+    public IEnumerable<GrantedPermission> Grants => _byPermission.Values.SelectMany(static g => g);
+
+    /// <summary>
     /// Whether the Employee holds a permission at a scope that satisfies the request.
     /// </summary>
     /// <remarks>

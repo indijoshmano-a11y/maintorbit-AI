@@ -7,6 +7,7 @@ using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
 using MaintOrbit.Application.Abstractions.Notifications;
+using MaintOrbit.Infrastructure.Caching;
 using MaintOrbit.Infrastructure.Cryptography;
 using MaintOrbit.Infrastructure.MultiTenancy;
 using MaintOrbit.Infrastructure.Notifications;
@@ -19,7 +20,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace MaintOrbit.Infrastructure.DependencyInjection;
 
@@ -57,6 +60,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddRepositories(services);
         AddAccessTokens(services, configuration);
         AddSessions(services, configuration);
+        AddPermissionCache(services, configuration);
         AddAuthorization(services);
         AddPasswordReset(services, configuration);
         AddEncryption(services, configuration);
@@ -181,16 +185,76 @@ public static class InfrastructureServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers the permission cache (ADR-0006).
+    /// </summary>
+    /// <remarks>
+    /// <b>Which implementation is a configuration decision, made once, at startup.</b> With a
+    /// connection string, Redis; without one, a cache that stores nothing and resolves every
+    /// request from the database. Deciding per call would make the failure semantics an accident
+    /// of authorship, which is exactly what ADR-0021 forbids.
+    /// <para>
+    /// The multiplexer is a singleton and is created lazily: StackExchange.Redis multiplexes over
+    /// one connection, and building a second per request is the misconfiguration
+    /// backend-technologies §5.2 warns produces latency outliers. <c>AbortOnConnectFail</c> is
+    /// cleared so an unreachable server is an outage the cache survives rather than a host that
+    /// will not start — Redis is not permitted to become a hard dependency of authorization.
+    /// </para>
+    /// </remarks>
+    private static void AddPermissionCache(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<PermissionCacheOptions>()
+            .Bind(configuration.GetSection(PermissionCacheOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton: ValidateDataAnnotations has already registered an
+        // IValidateOptions<PermissionCacheOptions>, and TryAdd would see the service type as
+        // present and silently do nothing — leaving the sixty-second bound unenforced.
+        services.AddSingleton<IValidateOptions<PermissionCacheOptions>,
+            PermissionCacheOptionsValidator>();
+
+        // Registered as its own service rather than captured in the cache's closure, so the
+        // container owns its lifetime and disposes it with the host. A multiplexer held only by a
+        // lambda is a TCP connection that outlives everything that used it — invisible in one
+        // process, and a connection leak per host in a test suite that builds many.
+        //
+        // Never resolved when the cache is disabled, so a deployment without Redis makes no
+        // connection attempt at all.
+        services.TryAddSingleton<IConnectionMultiplexer>(provider =>
+        {
+            var value = provider.GetRequiredService<IOptions<PermissionCacheOptions>>().Value;
+
+            var settings = ConfigurationOptions.Parse(value.ConnectionString);
+
+            // An unreachable server must degrade, not stop the host. Redis is not permitted to
+            // become a hard dependency of authorization.
+            settings.AbortOnConnectFail = false;
+
+            return ConnectionMultiplexer.Connect(settings);
+        });
+
+        services.TryAddSingleton<IPermissionCache>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<PermissionCacheOptions>>();
+
+            return options.Value.IsEnabled
+                ? new RedisPermissionCache(
+                    provider.GetRequiredService<IConnectionMultiplexer>(),
+                    options,
+                    provider.GetRequiredService<ILogger<RedisPermissionCache>>())
+                : new DisabledPermissionCache();
+        });
+    }
+
+    /// <summary>
     /// Registers permission resolution.
     /// </summary>
     /// <remarks>
     /// Scoped, because resolution reads through the repository and therefore the request's tenant
-    /// scope. The cache is a singleton — it is meant to outlive a request, which is the whole
-    /// point — and the registered implementation holds nothing until Redis exists.
+    /// scope. The cache it reads through is a singleton — outliving a request is the whole point.
     /// </remarks>
     private static void AddAuthorization(IServiceCollection services)
     {
-        services.TryAddSingleton<IPermissionCache, NoPermissionCache>();
         services.TryAddScoped<IPermissionService, PermissionService>();
         services.TryAddScoped<IAuthorizationEvaluator, AuthorizationEvaluator>();
     }
