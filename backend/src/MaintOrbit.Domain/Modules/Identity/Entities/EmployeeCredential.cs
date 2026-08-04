@@ -20,9 +20,10 @@ namespace MaintOrbit.Domain.Modules.Identity.Entities;
 /// Employee without one is an ordinary state, not an incomplete record.
 /// </para>
 /// <para>
-/// <b>State only.</b> Lockout counters and timestamps are stored here; nothing increments,
-/// evaluates, or expires them. Those are authentication workflow, and this milestone is the
-/// model.
+/// <b>Lockout lives here, and only its state transitions do.</b> The aggregate counts failures
+/// and decides when the threshold is reached; <i>what</i> the threshold is belongs to the Company's
+/// authentication policy (FR-AUTH-011), and the caller supplies it. A credential that knew its own
+/// threshold would be one that had to be reloaded whenever the policy changed.
 /// </para>
 /// </remarks>
 public sealed class EmployeeCredential
@@ -154,11 +155,10 @@ public sealed class EmployeeCredential
     /// Whether a lockout is currently in force.
     /// </summary>
     /// <remarks>
-    /// Reads the state FR-AUTH-011 defines; it does not maintain it. Nothing in this build sets
-    /// <see cref="LockoutUntilUtc"/> yet — counting failures and notifying the holder is
-    /// authentication workflow and lands with it. The check exists now because the alternative
-    /// is a column that is enforced only once somebody remembers to add the check, and by then
-    /// the lockout has been silently ineffective for however long.
+    /// <b>This is also the automatic unlock.</b> Nothing sweeps expired lockouts, and nothing
+    /// needs to: the lockout is a timestamp in the future, so it stops being in force the moment
+    /// the clock passes it. A background job clearing the column would add a moving part whose
+    /// failure mode is an account locked longer than its policy says.
     /// <para>
     /// <b>No verification method lives on this aggregate.</b> Verifying a password requires the
     /// key derivation function, and the domain cannot reach it: <c>IPasswordHasher</c> is an
@@ -268,5 +268,76 @@ public sealed class EmployeeCredential
 
         UpdatedAtUtc = changedAtUtc;
         UpdatedByEmployeeId = changedBy;
+    }
+
+    /// <summary>
+    /// Records a failed authentication, locking the account when the threshold is reached
+    /// (FR-AUTH-011).
+    /// </summary>
+    /// <remarks>
+    /// <b>An expired lockout starts a fresh window.</b> Without that reset the counter would still
+    /// sit at the threshold when the lockout lapsed, and the very next mistyped password would
+    /// re-lock immediately — an account effectively locked forever after one bad afternoon, which
+    /// is the denial-of-service 07-api-security T-3 warns lockout can become.
+    /// <para>
+    /// The threshold and duration come from the caller because they are the Company's
+    /// (FR-AUTH-011, and the policy that carries them). The aggregate owns when to lock, not how
+    /// eagerly.
+    /// </para>
+    /// </remarks>
+    /// <returns><see langword="true"/> if this attempt locked the account.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The threshold is not positive, or the
+    /// duration is not.</exception>
+    public bool RecordFailedAttempt(
+        int maximumAttempts, TimeSpan lockoutDuration, DateTimeOffset atUtc)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumAttempts, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(lockoutDuration, TimeSpan.Zero);
+
+        if (LockoutUntilUtc is { } until && until <= atUtc)
+        {
+            // The previous lockout has run out. Its counter goes with it.
+            FailedLoginCount = 0;
+            LockoutUntilUtc = null;
+        }
+
+        FailedLoginCount++;
+        UpdatedAtUtc = atUtc;
+
+        if (FailedLoginCount < maximumAttempts)
+        {
+            return false;
+        }
+
+        LockoutUntilUtc = atUtc.Add(lockoutDuration);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Records a successful authentication, clearing the failure count (FR-AUTH-011).
+    /// </summary>
+    /// <remarks>
+    /// A success is proof the holder is present, so the run of failures that preceded it stops
+    /// counting toward a lockout. Without this the count would accumulate across weeks of ordinary
+    /// typing mistakes and lock an account that had never been under attack.
+    /// <para>
+    /// It clears <see cref="LockoutUntilUtc"/> too. Reaching here means the caller already found
+    /// the credential unlocked, so the only value that could be present is a lapsed one — and
+    /// leaving it would make the next failure look like a continuation of a window that closed.
+    /// </para>
+    /// </remarks>
+    public void RecordSuccessfulAttempt(DateTimeOffset atUtc)
+    {
+        if (FailedLoginCount == 0 && LockoutUntilUtc is null)
+        {
+            // Nothing to clear. Returning early keeps an ordinary sign-in from marking the row
+            // dirty, so the common case writes nothing at all.
+            return;
+        }
+
+        FailedLoginCount = 0;
+        LockoutUntilUtc = null;
+        UpdatedAtUtc = atUtc;
     }
 }

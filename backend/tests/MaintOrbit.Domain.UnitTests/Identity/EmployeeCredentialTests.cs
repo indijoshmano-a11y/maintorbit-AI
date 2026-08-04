@@ -136,18 +136,41 @@ public sealed class EmployeeCredentialTests
         Assert.Null(typeof(Employee).GetProperty(forbidden));
     }
 
-    [Fact]
-    public void Credential_ExposesNoWayToMutateLockoutState()
+    [Theory]
+    [InlineData("FailedLoginCount")]
+    [InlineData("LockoutUntilUtc")]
+    [InlineData("PasswordHash")]
+    [InlineData("RequirePasswordChange")]
+    public void Credential_ExposesNoPublicSetterForItsProtectedState(string property)
     {
-        // "Persist only state. No lockout logic." Every setter is private, so the transitions
-        // arrive with the workflow that owns them rather than being available early and applied
-        // inconsistently.
+        // This replaces 11.3's "no lockout logic at all" gate, which FR-AUTH-011's counting has
+        // now made obsolete — that assertion existed to stop the transitions arriving early and
+        // being applied inconsistently, and they have arrived, in one place.
+        //
+        // What still matters is that they are the *only* way in. A public setter would let a
+        // caller clear a lockout or zero a counter without going through the rules that decide
+        // when either is legitimate.
+        Assert.False(typeof(EmployeeCredential).GetProperty(property)!.SetMethod!.IsPublic);
+    }
+
+    [Fact]
+    public void Credential_MutatesLockoutStateOnlyThroughItsNamedTransitions()
+    {
+        // Three, and no more: a failure, a success, and a password change. Each one is a rule
+        // about when the state may move, and a fourth added without a rule is how the counter
+        // ends up cleared by something that never established the holder was present.
         var mutators = typeof(EmployeeCredential).GetMethods()
-            .Where(method => method.Name.StartsWith("Record", StringComparison.Ordinal)
-                             || method.Name.StartsWith("Lock", StringComparison.Ordinal)
-                             || method.Name.StartsWith("Reset", StringComparison.Ordinal))
+            .Where(method => method.DeclaringType == typeof(EmployeeCredential))
+            .Where(method => method.Name is "RecordFailedAttempt"
+                          or "RecordSuccessfulAttempt"
+                          or "ChangePassword"
+                          or "Establish")
+            .Select(method => method.Name)
+            .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Empty(mutators);
+        Assert.Equal(
+            ["ChangePassword", "Establish", "RecordFailedAttempt", "RecordSuccessfulAttempt"],
+            mutators);
     }
 }

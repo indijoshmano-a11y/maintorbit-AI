@@ -1,9 +1,11 @@
 using MaintOrbit.Application.Abstractions.Messaging;
+using MaintOrbit.Application.Abstractions.Persistence;
 using MaintOrbit.Application.Abstractions.Security;
 using MaintOrbit.Domain.Common.Results;
 using MaintOrbit.Domain.Modules.Identity.Entities;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Domain.Modules.Identity.ValueObjects;
+using MaintOrbit.Shared.MultiTenancy;
 
 namespace MaintOrbit.Application.Modules.Identity.Commands.Login;
 
@@ -22,10 +24,17 @@ namespace MaintOrbit.Application.Modules.Identity.Commands.Login;
 /// <see cref="IDecoyPasswordHash"/> and discards the answer, so the miss costs what the hit costs.
 /// </para>
 /// <para>
-/// <b>Nothing is written.</b> No session, no token, no last-login timestamp, and — for now — no
-/// failed-attempt counter. The consequence is stated on the milestone: this path has no
-/// brute-force protection of its own until FR-AUTH-011's counting and NFR-SEC-016's rate limiting
-/// land.
+/// <b>It writes exactly one thing: the failed-attempt counter (FR-AUTH-011).</b> No session, no
+/// token, no last-login timestamp. The counter is committed here rather than by the caller
+/// because a failed attempt has no other commit point — sign-in returns as soon as this rejects,
+/// and a count that only survived a successful login would never lock anything.
+/// </para>
+/// <para>
+/// <b>A locked account is not distinguishable from a wrong password.</b> It rejects with the same
+/// error, and it still pays for a decoy verification — skipping the hash would make a locked
+/// account answer measurably faster, which is an oracle for exactly the accounts an attacker has
+/// been probing. That deliberately declines the saving T-5 would suggest, because the saving is
+/// observable.
 /// </para>
 /// <para>
 /// <b>The Employee is resolved within the active tenant context.</b> Row-level security applies to
@@ -40,6 +49,8 @@ public sealed class LoginCommandHandler(
     IEmployeeCredentialRepository credentials,
     IPasswordHasher passwordHasher,
     IDecoyPasswordHash decoy,
+    IAuthenticationPolicyProvider policies,
+    IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<LoginCommand, AuthenticationResult>
 {
@@ -62,6 +73,8 @@ public sealed class LoginCommandHandler(
             return Rejected();
         }
 
+        var now = timeProvider.GetUtcNow();
+
         var employee = await employees.FindByEmailAsync(email, cancellationToken)
             .ConfigureAwait(false);
 
@@ -75,10 +88,14 @@ public sealed class LoginCommandHandler(
         var credential = await credentials.FindForAsync(employee.Id, cancellationToken)
             .ConfigureAwait(false);
 
-        if (credential is null || credential.IsLockedOut(timeProvider.GetUtcNow()))
+        if (credential is null || credential.IsLockedOut(now))
         {
             // No password set — a federated-only Employee, or a Company that disabled password
             // authentication (FR-AUTH-004) — or a lockout in force.
+            //
+            // A locked account records nothing. Counting attempts it never verified would let an
+            // attacker extend somebody's lockout indefinitely by continuing to knock, which turns
+            // the control into the denial-of-service vector 07-api-security T-3 warns about.
             return RejectAfterEqualWork(command.Password);
         }
 
@@ -89,8 +106,18 @@ public sealed class LoginCommandHandler(
             // Covers Failed and Unusable alike. A stored hash that will not parse is an
             // operational fault worth an alert, but it is not a distinction the caller may see —
             // it would confirm the account exists.
+            await RecordFailureAsync(employee.CompanyId, credential, now, cancellationToken)
+                .ConfigureAwait(false);
+
             return Rejected();
         }
+
+        // A success is proof the holder is present, so the run of failures before it stops
+        // counting. Without this the count would accumulate across weeks of ordinary typing
+        // mistakes and lock an account that was never under attack.
+        credential.RecordSuccessfulAttempt(now);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success(new AuthenticationResult(
             employee.Id,
@@ -99,6 +126,38 @@ public sealed class LoginCommandHandler(
             // moment the plaintext exists to re-derive from. Reported rather than acted on: this
             // milestone writes nothing, so the caller decides when to upgrade the stored hash.
             PasswordNeedsRehash: passwordHasher.NeedsRehash(credential.PasswordHash)));
+    }
+
+    /// <summary>
+    /// Counts the failure and locks the account if it has reached the Company's threshold.
+    /// </summary>
+    /// <remarks>
+    /// <b>Committed even though the request fails</b>, and that is the whole point: sign-in
+    /// returns the moment this rejects, so a counter left uncommitted would reset itself on every
+    /// attempt and lock nothing ever.
+    /// <para>
+    /// The threshold and duration are the Company's (FR-AUTH-011). Read here rather than passed
+    /// in, because only the failure path needs them and only a real Employee has a Company.
+    /// </para>
+    /// <para>
+    /// Whether this attempt locked the account changes nothing the caller returns. The next
+    /// attempt will be refused by the lockout check above, with the same error as every other
+    /// failure — the Employee learns of it through the notification FR-AUTH-011 requires, which is
+    /// not this milestone's to send.
+    /// </para>
+    /// </remarks>
+    private async Task RecordFailureAsync(
+        CompanyId companyId,
+        EmployeeCredential credential,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var policy = await policies.GetAsync(companyId, cancellationToken).ConfigureAwait(false);
+
+        credential.RecordFailedAttempt(
+            policy.MaximumFailedAttempts, TimeSpan.FromMinutes(policy.LockoutMinutes), now);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

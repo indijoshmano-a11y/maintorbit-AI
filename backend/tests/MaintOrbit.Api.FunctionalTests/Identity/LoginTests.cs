@@ -1,3 +1,4 @@
+using MaintOrbit.Application.Abstractions.Persistence;
 using MaintOrbit.Application.Abstractions.Security;
 using MaintOrbit.Application.Modules.Identity.Commands.Login;
 using MaintOrbit.Domain.Modules.Identity.Entities;
@@ -30,8 +31,23 @@ public sealed class LoginTests
         public FakeCredentials Credentials { get; } = new();
         public ScriptedHasher Hasher { get; } = new();
 
+        public CountingUnitOfWork UnitOfWork { get; } = new();
+
+        /// <summary>The policy the lockout tests drive from.</summary>
+        /// <remarks>
+        /// Three attempts and fifteen minutes, so the threshold is reached quickly and the
+        /// duration is long enough that no test races it.
+        /// </remarks>
+        public CompanyAuthenticationPolicy Policy { get; set; } =
+            CompanyAuthenticationPolicy.Create(
+                Company, 12, true, 60, 720, false,
+                maximumFailedAttempts: 3, lockoutMinutes: 15, Now).Value;
+
+        public DateTimeOffset Clock { get; set; } = Now;
+
         public LoginCommandHandler Handler() =>
-            new(Employees, Credentials, Hasher, new FakeDecoy(), new FakeClock(Now));
+            new(Employees, Credentials, Hasher, new FakeDecoy(),
+                new FixedAuthenticationPolicy(Policy), UnitOfWork, new FakeClock(Clock));
 
         public Employee GivenEmployee(EmployeeStatus status)
         {
@@ -418,6 +434,18 @@ public sealed class LoginTests
         }
 
         public bool NeedsRehash(PasswordHash hash) => RehashNeeded;
+    }
+
+    /// <summary>Counts commits, so a test can assert the counter was actually persisted.</summary>
+    private sealed class CountingUnitOfWork : IUnitOfWork
+    {
+        public int Commits { get; private set; }
+
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken)
+        {
+            Commits++;
+            return Task.FromResult(0);
+        }
     }
 
     private sealed class FakeDecoy : IDecoyPasswordHash
