@@ -7,6 +7,7 @@ using MaintOrbit.Application.Modules.Identity.Commands.Mfa;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
 using MaintOrbit.Application.Modules.Identity.Commands.SignOut;
+using MaintOrbit.Application.Modules.Identity.Queries.Employees;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -88,6 +89,17 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             ICommandHandler<SignOutEverywhereCommand>,
             SignOutEverywhereCommandHandler>();
+
+        // Queries. Registered against IQueryHandler rather than ICommandHandler because ADR-0012
+        // treats them differently — no write transaction, no outbox — and the dispatcher tells
+        // them apart by the contract they implement.
+        services.TryAddScoped<
+            IQueryHandler<ListEmployeesQuery, EmployeePage>,
+            ListEmployeesQueryHandler>();
+
+        services.TryAddScoped<
+            IQueryHandler<GetCurrentEmployeeQuery, EmployeeSummary>,
+            GetCurrentEmployeeQueryHandler>();
 
         return services;
     }

@@ -11,4 +11,13 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The authorization plumbing is internal deliberately: an endpoint declares a permission
+         and nothing outside this assembly should reach the policy provider or the handler. What
+         the tests need to assert is that these are the registrations that actually resolve — a
+         guarantee about the composition root rather than a public surface — so the test project
+         is given access instead of the types being widened. Matches Infrastructure. -->
+    <InternalsVisibleTo Include="MaintOrbit.Api.FunctionalTests" />
+  </ItemGroup>
+
 </Project>

@@ -41,10 +41,14 @@ public static class PipelineExtensions
     /// endpoints, and everything later milestones add between here and the handler.
     /// </description></item>
     /// <item><description>
-    /// <b>Routing, then authentication, then authorization, then tenant context.</b> Routing first
-    /// so an endpoint's own requirements are known by the time the request is authenticated;
-    /// tenant context last of the four because it reads the validated principal, and its scope
-    /// must still be open when an endpoint queries.
+    /// <b>Routing, then authentication, then tenant context, then authorization.</b> Routing first
+    /// so an endpoint's own requirements are known by the time the request is authenticated.
+    /// Tenant context after authentication because it reads the validated principal — and
+    /// <b>before</b> authorization because permission resolution is a database read of
+    /// <c>employee_roles</c>, which row-level security shows nothing without a Company in scope.
+    /// With the two the other way round every permission check resolves an empty set and denies,
+    /// which is safe and completely silent: authorization would look implemented and refuse
+    /// everybody.
     /// </description></item>
     /// </list>
     /// Endpoint mapping stays with the composition root, since what is mapped is a
@@ -73,11 +77,15 @@ public static class PipelineExtensions
         app.UseRouting();
 
         app.UseAuthentication();
-        app.UseAuthorization();
 
-        // After authentication, because it reads the validated principal; before endpoints,
-        // because everything downstream queries within the tenant scope it opens.
+        // Between authentication and authorization, and both halves of that matter. It reads the
+        // validated principal, so it cannot run earlier; and it opens the tenant scope that
+        // permission resolution reads under, so it cannot run later. It also confirms the session
+        // (§3.7), which is what makes revocation effective inside a token's lifetime — an
+        // authorization decision made for a revoked session would be a decision made for nobody.
         app.UseMiddleware<TenantContextMiddleware>();
+
+        app.UseAuthorization();
 
         return app;
     }

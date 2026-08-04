@@ -36,6 +36,7 @@ app.UseApiPipeline();
 
 app.MapHealthEndpoints();
 app.MapAuthenticationEndpoints();
+app.MapEmployeeEndpoints();
 
 app.Run();
 

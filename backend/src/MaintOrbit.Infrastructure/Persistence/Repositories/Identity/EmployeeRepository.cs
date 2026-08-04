@@ -31,5 +31,24 @@ internal sealed class EmployeeRepository(MaintOrbitDbContext context) : IEmploye
             cancellationToken);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<Employee>> ListAsync(
+        int skip, int take, CancellationToken cancellationToken) =>
+        // AsNoTracking: a directory read changes nothing, and tracking every row would put the
+        // whole page into the change tracker for a request that will never save.
+        await context.Employees
+            .AsNoTracking()
+            .Where(employee => employee.DeletedAtUtc == null)
+            .OrderBy(employee => employee.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <inheritdoc />
+    public Task<int> CountAsync(CancellationToken cancellationToken) =>
+        context.Employees.CountAsync(
+            employee => employee.DeletedAtUtc == null, cancellationToken);
+
+    /// <inheritdoc />
     public void Add(Employee employee) => context.Employees.Add(employee);
 }

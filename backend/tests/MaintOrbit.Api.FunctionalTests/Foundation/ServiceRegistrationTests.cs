@@ -1,8 +1,10 @@
 using System.Reflection;
+using MaintOrbit.Api.Authorization;
 using MaintOrbit.Api.Extensions;
 using MaintOrbit.Application.DependencyInjection;
 using MaintOrbit.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MaintOrbit.Api.FunctionalTests.Foundation;
@@ -178,6 +180,40 @@ public sealed class ServiceRegistrationTests
         Assert.Equal(
             ["MaintOrbitDbContext", "MfaChallengeVerifier", "SigningKeyRing"],
             selfRegistered.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void OurAuthorizationPolicyProvider_IsTheOneThatResolves()
+    {
+        // The defect this exists to catch is a silent one, and it happened. AddAuthorization()
+        // registers DefaultAuthorizationPolicyProvider against this service type, so a
+        // TryAddSingleton for ours sees the type present and adds nothing. Nothing warns; the
+        // symptom is an InvalidOperationException — "the AuthorizationPolicy named ... was not
+        // found" — at the first request to a protected endpoint, which reads as a broken endpoint
+        // rather than a discarded registration.
+        using var provider = Compose().BuildServiceProvider();
+
+        Assert.IsType<PermissionPolicyProvider>(
+            provider.GetRequiredService<IAuthorizationPolicyProvider>());
+    }
+
+    [Fact]
+    public void OurPermissionHandler_IsAmongTheAuthorizationHandlers()
+    {
+        // The same defect on the other registration, and it fails differently: with the handler
+        // missing, every permission requirement goes unhandled and deny-by-default turns every
+        // protected endpoint into a 403. Safe, and completely silent — authorization would look
+        // implemented and refuse everybody.
+        //
+        // IAuthorizationHandler is a multi-implementation service, so this asserts membership
+        // rather than identity: the framework's PassThroughAuthorizationHandler belongs here too.
+        using var provider = Compose().BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var handlers = scope.ServiceProvider.GetServices<IAuthorizationHandler>().ToList();
+
+        Assert.Contains(handlers, handler => handler is PermissionAuthorizationHandler);
+        Assert.Single(handlers, handler => handler is PermissionAuthorizationHandler);
     }
 
     private static ParameterInfo[] Constructor(Type type) =>

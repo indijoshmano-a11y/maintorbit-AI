@@ -48,15 +48,29 @@ public static class AuthenticationServiceCollectionExtensions
         // build rather than anything visible at the call site.
         services.AddRouting();
 
-        // Wired so [Authorize] resolves. No policy is registered and no endpoint requires one yet
-        // — permission evaluation is its own milestone, and putting a placeholder policy here
-        // would be a decision made before the thing it decides about exists.
+        // Wired so [Authorize] resolves. Still no policy registered by name: endpoints declare a
+        // permission and PermissionPolicyProvider derives the policy from it, so there is no
+        // startup list to keep in step with the endpoints it serves.
         services.AddAuthorization();
 
         // Derives a policy from any permission an endpoint declares, so declaring one is all there
         // is to do — no startup list to keep in step with the endpoints it serves.
-        services.TryAddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
-        services.TryAddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        //
+        // AddSingleton, not TryAddSingleton. AddAuthorization above has already registered
+        // DefaultAuthorizationPolicyProvider against this service type, so TryAdd sees it as
+        // present and silently does nothing — leaving every permission policy unresolvable. The
+        // symptom is not a denial but an InvalidOperationException at the first protected request:
+        // "the AuthorizationPolicy named ... was not found". Registering last wins for a single
+        // resolve, which is what the middleware does.
+        services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+
+        // TryAddEnumerable, not TryAddScoped. IAuthorizationHandler is a multi-implementation
+        // service — AddAuthorization registers PassThroughAuthorizationHandler against it — and
+        // TryAdd matches on the service type alone, so it would find one present and add nothing.
+        // The enumerable form deduplicates on the implementation type instead, which is the
+        // question actually being asked.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionAuthorizationHandler>());
 
         return services;
     }
@@ -78,7 +92,8 @@ public static class AuthenticationServiceCollectionExtensions
         bearer.Events = new JwtBearerEvents
         {
             OnTokenValidated = ValidateTokenTypeAsync,
-            OnChallenge = WriteUniformChallengeAsync
+            OnChallenge = WriteUniformChallengeAsync,
+            OnForbidden = WriteForbiddenAsync
         };
     }
 
@@ -105,6 +120,62 @@ public static class AuthenticationServiceCollectionExtensions
 
             options.TokenValidationParameters = parameters.Create();
         }
+    }
+
+    /// <summary>
+    /// Writes the documented envelope for an authenticated caller who is not permitted.
+    /// </summary>
+    /// <remarks>
+    /// The framework's default is a bare <c>403</c> with an empty body, which §4.3 does not allow
+    /// — every error carries the envelope, and a client that gets nothing back cannot tell a
+    /// refusal from a broken response. §7 maps this to <c>permission_denied</c>.
+    /// <para>
+    /// <b>It names no permission.</b> Reporting which one was missing would turn a denial into a
+    /// map of the permission model, letting a caller enumerate the catalogue by walking endpoints
+    /// and reading what each one asked for. The caller already knows what they tried to do; what
+    /// they may not learn is what would have been enough.
+    /// </para>
+    /// <para>
+    /// FR-PERM-004 requires every denial to produce an audit event. The auditing module does not
+    /// exist, so that is outstanding rather than done — recorded here because this is the line it
+    /// belongs on.
+    /// </para>
+    /// </remarks>
+    private static async Task WriteForbiddenAsync(ForbiddenContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (context.Response.HasStarted)
+        {
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        context.Response.ContentType = "application/problem+json";
+
+        var problem = new ProblemDetails
+        {
+            Type = "permission_denied",
+            Title = "Not permitted",
+            Status = StatusCodes.Status403Forbidden,
+            Detail = "You do not have permission to perform this operation."
+        };
+
+        problem.Extensions["correlationId"] =
+            context.HttpContext.RequestServices
+                .GetService<MaintOrbit.Shared.Abstractions.ICorrelationIdAccessor>()?.Current;
+
+        // Retrying changes nothing until somebody grants the permission, which is not the
+        // caller's to do.
+        problem.Extensions["retryable"] = false;
+
+        await JsonSerializer
+            .SerializeAsync(
+                context.Response.Body,
+                problem,
+                ProblemJson,
+                context.HttpContext.RequestAborted)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

@@ -48,6 +48,37 @@ public interface IEmployeeRepository
     Task<Employee?> FindByEmailAsync(Email email, CancellationToken cancellationToken);
 
     /// <summary>
+    /// A page of the Company's Employees, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// <b>No Company parameter.</b> Row-level security applies the tenant predicate below the
+    /// application layer, so this returns the Company in scope and nothing else — and a
+    /// discretionary filter here would be a second copy of the control, which is the one that
+    /// gets forgotten (NFR-SEC-007).
+    /// <para>
+    /// Ordered by identifier, which is UUIDv7 and therefore time-ordered (§1.6). §5.2 requires a
+    /// deterministic order with ties broken by <c>id</c>; ordering by <c>id</c> alone gives both
+    /// at once, and it is the primary key, so the page is served from an index rather than a sort.
+    /// </para>
+    /// <para>
+    /// Soft-deleted Employees are excluded. §4.2 retains removed rows so ledger and audit records
+    /// stay attributed (FR-TEN-008); a directory that listed them would show every person who has
+    /// ever left.
+    /// </para>
+    /// </remarks>
+    Task<IReadOnlyList<Employee>> ListAsync(int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// How many Employees the Company has.
+    /// </summary>
+    /// <remarks>
+    /// §4.4 carries a total on small bounded collections because "counting them is cheap and the
+    /// UI benefits". The same filter as <see cref="ListAsync"/>, so the total describes the
+    /// collection being paged rather than a larger one.
+    /// </remarks>
+    Task<int> CountAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// Adds a new Employee to the unit of work.
     /// </summary>
     /// <remarks>

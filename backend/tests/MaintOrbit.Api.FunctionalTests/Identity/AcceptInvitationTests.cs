@@ -287,6 +287,16 @@ public sealed class AcceptInvitationTests
             Task.FromResult(_employees.Values.FirstOrDefault(e => e.Email == email));
 
         public void Add(Employee employee) => _employees[employee.Id] = employee;
+
+        // Unused by these tests: the directory endpoints have their own, against a real database.
+        // A fake that paged an in-memory list would assert nothing about row-level security, which
+        // is the only interesting thing about listing Employees.
+        public Task<IReadOnlyList<Employee>> ListAsync(
+            int skip, int take, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<int> CountAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeCredentialRepository : IEmployeeCredentialRepository
