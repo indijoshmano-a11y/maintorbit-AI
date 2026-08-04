@@ -38,4 +38,14 @@ public static class IdentityPermissions
     /// which is a strictly larger capability than seeing what they may do now.
     /// </remarks>
     public static PermissionCode EmployeeManage { get; } = PermissionCode.Create("employee.manage");
+
+    /// <summary>
+    /// Manage Company settings — <c>company.manage</c> (§3.3, §3.7).
+    /// </summary>
+    /// <remarks>
+    /// §3.7 assigns it to Company settings, of which the authentication policy is one. Reading and
+    /// changing share it: the policy states how weak a password may be and how long a session
+    /// lives, so knowing it is itself reconnaissance.
+    /// </remarks>
+    public static PermissionCode CompanyManage { get; } = PermissionCode.Create("company.manage");
 }

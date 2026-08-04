@@ -22,6 +22,7 @@ public sealed class AcceptInvitationCommandHandler(
     IEmployeeRepository employees,
     IEmployeeCredentialRepository credentials,
     IPasswordHasher passwordHasher,
+    IAuthenticationPolicyProvider policies,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<AcceptInvitationCommand>
@@ -34,9 +35,6 @@ public sealed class AcceptInvitationCommandHandler(
 
         if (string.IsNullOrEmpty(command.Password))
         {
-            // Checked before any work. The strength policy (FR-AUTH-002) belongs in a validation
-            // behaviour ahead of this handler; what is enforced here is the floor below which the
-            // hasher itself refuses to operate.
             return Result.Failure(Error.Validation("A password is required."));
         }
 
@@ -66,6 +64,18 @@ public sealed class AcceptInvitationCommandHandler(
             // constraint remains as the guarantee under concurrency.
             return Result.Failure(Error.Conflict(
                 "This Employee already has a credential."));
+        }
+
+        // FR-AUTH-002: the strength policy is the Company's. Checked before hashing, because
+        // Argon2id at production parameters costs real memory and CPU and a password that cannot
+        // be accepted should not pay for it.
+        var policy = await policies.GetAsync(employee.CompanyId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!policy.IsPasswordLongEnough(command.Password.Length))
+        {
+            return Result.Failure(Error.Validation(
+                $"The password must be at least {policy.MinimumPasswordLength} characters."));
         }
 
         var now = timeProvider.GetUtcNow();

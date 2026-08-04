@@ -35,7 +35,7 @@ public sealed class AcceptInvitationTests
         public CountingPasswordHasher Hasher { get; } = new();
 
         public AcceptInvitationCommandHandler Handler() =>
-            new(Employees, Credentials, Hasher, UnitOfWork,
+            new(Employees, Credentials, Hasher, new FixedAuthenticationPolicy(), UnitOfWork,
                 new FakeTimeProvider(Now));
 
         public Employee GivenInvitedEmployee()

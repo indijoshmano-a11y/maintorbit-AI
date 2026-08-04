@@ -40,6 +40,7 @@ public sealed class CompletePasswordResetCommandHandler(
     IEmployeeCredentialRepository credentials,
     ISessionRepository sessions,
     IPasswordHasher passwordHasher,
+    IAuthenticationPolicyProvider policies,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<CompletePasswordResetCommand>
@@ -124,6 +125,22 @@ public sealed class CompletePasswordResetCommandHandler(
             // enrolment path with no invitation behind it.
             await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             return Rejected();
+        }
+
+        // The same policy the invitation path applies. A reset that accepted a weaker password
+        // than enrolment would make the strength rule optional for anyone willing to reset.
+        var policy = await policies.GetAsync(employee.CompanyId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!policy.IsPasswordLongEnough(command.NewPassword.Length))
+        {
+            // The token is spent either way. It was valid, and the Employee proved control of the
+            // address; refusing without consuming it would let a weak first attempt keep the link
+            // alive for an unlimited number of tries.
+            await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            return Result.Failure(Error.Validation(
+                $"The password must be at least {policy.MinimumPasswordLength} characters."));
         }
 
         credential.ChangePassword(

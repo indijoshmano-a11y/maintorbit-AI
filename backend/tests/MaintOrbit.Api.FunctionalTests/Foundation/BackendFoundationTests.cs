@@ -195,7 +195,7 @@ public sealed class BackendFoundationTests : IClassFixture<WebApplicationFactory
         var context = scope.ServiceProvider.GetRequiredService<MaintOrbitDbContext>();
 
         Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
-        Assert.Equal(12, context.Model.GetEntityTypes().Count());
+        Assert.Equal(13, context.Model.GetEntityTypes().Count());
     }
 
     [Fact]

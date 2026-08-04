@@ -57,6 +57,10 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     /// <summary>Password reset requests — C4, stored only as hashes (FR-AUTH-012).</summary>
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
+    /// <summary>Per-Company authentication policy (§3.10).</summary>
+    public DbSet<CompanyAuthenticationPolicy> CompanyAuthenticationPolicies =>
+        Set<CompanyAuthenticationPolicy>();
+
     /// <summary>TOTP enrolments — C4; the secret is stored only as an envelope (§4.2).</summary>
     public DbSet<MfaEnrollment> MfaEnrollments => Set<MfaEnrollment>();
 

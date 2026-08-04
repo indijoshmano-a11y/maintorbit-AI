@@ -1,5 +1,6 @@
 using MaintOrbit.Application.Abstractions.Messaging;
 using MaintOrbit.Application.Modules.Identity.Commands.AcceptInvitation;
+using MaintOrbit.Application.Modules.Identity.Commands.AuthenticationPolicy;
 using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.EmployeeRoles;
@@ -98,6 +99,10 @@ public static class ApplicationServiceCollectionExtensions
 
         services.TryAddScoped<ICommandHandler<RemoveRoleCommand>, RemoveRoleCommandHandler>();
 
+        services.TryAddScoped<
+            ICommandHandler<UpdateAuthenticationPolicyCommand, AuthenticationPolicyView>,
+            UpdateAuthenticationPolicyCommandHandler>();
+
         // Queries. Registered against IQueryHandler rather than ICommandHandler because ADR-0012
         // treats them differently — no write transaction, no outbox — and the dispatcher tells
         // them apart by the contract they implement.
@@ -112,6 +117,10 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             IQueryHandler<ListEmployeeRolesQuery, EmployeeRoleList>,
             ListEmployeeRolesQueryHandler>();
+
+        services.TryAddScoped<
+            IQueryHandler<GetAuthenticationPolicyQuery, AuthenticationPolicyView>,
+            GetAuthenticationPolicyQueryHandler>();
 
         return services;
     }

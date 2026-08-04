@@ -60,6 +60,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddRepositories(services);
         AddAccessTokens(services, configuration);
         AddSessions(services, configuration);
+        AddAuthenticationPolicy(services, configuration);
         AddPermissionCache(services, configuration);
         AddAuthorization(services);
         AddPasswordReset(services, configuration);
@@ -182,6 +183,31 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.TryAddSingleton<IPasswordResetTokenFactory, PasswordResetTokenFactory>();
         services.TryAddSingleton<IPasswordResetNotifier, UndeliveredPasswordResetNotifier>();
+    }
+
+    /// <summary>
+    /// Registers per-Company authentication policy (§3.10).
+    /// </summary>
+    /// <remarks>
+    /// The provider is scoped: it reads through the repository and therefore the request's tenant
+    /// scope. The defaults are options, validated on start — a deployment whose default policy no
+    /// Company could save refuses to run rather than failing on somebody's first sign-in.
+    /// </remarks>
+    private static void AddAuthenticationPolicy(
+        IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<AuthenticationPolicyDefaults>()
+            .Bind(configuration.GetSection(AuthenticationPolicyDefaults.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton: ValidateDataAnnotations has already registered an
+        // IValidateOptions<AuthenticationPolicyDefaults>, and TryAdd would see the service type as
+        // present and silently do nothing — leaving the relational rule unenforced.
+        services.AddSingleton<IValidateOptions<AuthenticationPolicyDefaults>,
+            AuthenticationPolicyDefaultsValidator>();
+
+        services.TryAddScoped<IAuthenticationPolicyProvider, AuthenticationPolicyProvider>();
     }
 
     /// <summary>
@@ -317,6 +343,9 @@ public static class InfrastructureServiceCollectionExtensions
         services.TryAddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.TryAddScoped<IAuthorizationRepository, AuthorizationRepository>();
         services.TryAddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.TryAddScoped<
+            ICompanyAuthenticationPolicyRepository,
+            CompanyAuthenticationPolicyRepository>();
         services.TryAddScoped<IMfaEnrollmentRepository, MfaEnrollmentRepository>();
         services.TryAddScoped<IMfaRecoveryCodeRepository, MfaRecoveryCodeRepository>();
     }

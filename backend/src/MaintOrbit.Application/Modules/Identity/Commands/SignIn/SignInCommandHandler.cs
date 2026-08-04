@@ -41,7 +41,7 @@ public sealed class SignInCommandHandler(
     IRefreshTokenFactory tokenFactory,
     IAccessTokenGenerator accessTokens,
     IUnitOfWork unitOfWork,
-    IOptions<SessionOptions> sessionOptions,
+    IAuthenticationPolicyProvider policies,
     IOptions<RefreshTokenOptions> refreshOptions,
     TimeProvider timeProvider)
     : ICommandHandler<SignInCommand, SignInResult>
@@ -88,12 +88,18 @@ public sealed class SignInCommandHandler(
         var identity = authenticated.Value;
         var now = timeProvider.GetUtcNow();
 
+        // FR-AUTH-007 makes both session timers Company-configured. Read after authentication, so
+        // the policy consulted is the one belonging to the Company the credential established —
+        // and inside the tenant scope, so row-level security shows this Company's row and no other.
+        var policy = await policies.GetAsync(identity.CompanyId, cancellationToken)
+            .ConfigureAwait(false);
+
         var session = Session.Start(
             identity.CompanyId,
             identity.EmployeeId,
             command.ClientType,
             now,
-            now.AddMinutes(sessionOptions.Value.AbsoluteLifetimeMinutes),
+            now.AddMinutes(policy.AbsoluteLifetimeMinutes),
             command.DeviceLabel,
             command.IpAddress);
 

@@ -38,6 +38,7 @@ app.MapHealthEndpoints();
 app.MapAuthenticationEndpoints();
 app.MapEmployeeEndpoints();
 app.MapEmployeeRoleEndpoints();
+app.MapAuthenticationPolicyEndpoints();
 
 app.Run();
 
