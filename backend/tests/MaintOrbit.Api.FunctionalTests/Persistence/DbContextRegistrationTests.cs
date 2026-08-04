@@ -106,6 +106,7 @@ public sealed class DbContextRegistrationTests
         Assert.Equal(
             [
                 "MaintOrbit.Domain.Modules.Identity.Entities.CompanyAuthenticationPolicy",
+                "MaintOrbit.Domain.Modules.Identity.Entities.EmailVerificationToken",
                 "MaintOrbit.Domain.Modules.Identity.Entities.Employee",
                 "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeCredential",
                 "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeRole",

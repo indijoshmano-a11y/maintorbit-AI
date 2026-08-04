@@ -62,4 +62,20 @@ public interface ICredentialDirectory
     /// </remarks>
     Task<CompanyId?> FindCompanyByPasswordResetTokenAsync(
         PasswordResetTokenHash tokenHash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The Company an email verification token belongs to, or <see langword="null"/> if no such
+    /// token exists.
+    /// </summary>
+    /// <remarks>
+    /// A verification link is opened from an email, in whatever browser the Employee happens to be
+    /// using, carrying a token and nothing else — the same chicken-and-egg problem sign-in and
+    /// password reset have, and answered the same way.
+    /// <para>
+    /// Returns the Company for consumed, invalidated, and expired tokens too. Refusing a replayed
+    /// link is only possible if the row can be found.
+    /// </para>
+    /// </remarks>
+    Task<CompanyId?> FindCompanyByEmailVerificationTokenAsync(
+        EmailVerificationTokenHash tokenHash, CancellationToken cancellationToken);
 }

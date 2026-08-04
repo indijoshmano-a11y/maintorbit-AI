@@ -223,4 +223,41 @@ public sealed class Employee
 
         return Result.Success();
     }
+
+    /// <summary>
+    /// Records that the Employee has proved control of their address (FR-AUTH-013).
+    /// </summary>
+    /// <remarks>
+    /// <b>Separate from <see cref="Activate"/>, which also verifies.</b> Accepting an invitation is
+    /// itself proof — the token was emailed to the address and came back — so the two paths reach
+    /// the same state by different evidence. This one exists for every address that was not proved
+    /// that way: one changed after activation, or one an administrator entered on somebody's
+    /// behalf.
+    /// <para>
+    /// <b>The first instant wins.</b> <see cref="EmailVerifiedAtUtc"/> records when the address was
+    /// proved, and re-proving it does not make that later — a column that moved on every
+    /// re-verification would answer "how long has this address been trusted?" with the wrong date.
+    /// Returning success rather than a conflict keeps a duplicate submission from reading as an
+    /// error, which it is not.
+    /// </para>
+    /// <para>
+    /// It does <b>not</b> change <see cref="Status"/>. Verification and activation are different
+    /// facts, and an Employee who was suspended does not come back by clicking a link in an old
+    /// message.
+    /// </para>
+    /// </remarks>
+    public Result VerifyEmail(DateTimeOffset verifiedAtUtc)
+    {
+        if (IsDeleted)
+        {
+            // A removed Employee's address proves nothing about an account that no longer exists,
+            // and FR-TEN-008 retains the row precisely so it stays inert.
+            return Result.Failure(Error.Conflict("The Employee has been removed."));
+        }
+
+        EmailVerifiedAtUtc ??= verifiedAtUtc;
+        UpdatedAtUtc = verifiedAtUtc;
+
+        return Result.Success();
+    }
 }

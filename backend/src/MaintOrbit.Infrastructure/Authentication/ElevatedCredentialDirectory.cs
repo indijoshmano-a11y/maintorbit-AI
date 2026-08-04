@@ -12,9 +12,9 @@ namespace MaintOrbit.Infrastructure.Authentication;
 /// </summary>
 /// <remarks>
 /// Raw ADO rather than EF Core, and that is the point. Going through the <c>DbContext</c> would put
-/// the whole model within reach of a path that must reach exactly two columns on two tables; two
-/// hand-written statements cannot drift into a join, a projection, or an <c>Include</c>. It is also
-/// legible in review, which a narrow security exception has to be.
+/// the whole model within reach of a path that must reach one column on four tables; hand-written
+/// statements cannot drift into a join, a projection, or an <c>Include</c>. It is also legible in
+/// review, which a narrow security exception has to be.
 /// <para>
 /// <b>How it is elevated.</b> It opens its own connection using
 /// <c>Persistence:ElevatedConnectionString</c>, which a deployment points at a role permitted to
@@ -24,8 +24,9 @@ namespace MaintOrbit.Infrastructure.Authentication;
 /// stops working rather than silently authenticating the wrong tenant.
 /// </para>
 /// <para>
-/// Neither query returns anything actable: a Company identifier, and nothing more. No password
-/// hash, no session, no employee row.
+/// No query here returns anything actable: a Company identifier, and nothing more. No password
+/// hash, no session, no employee row. Every one is a lookup by a value the caller already holds —
+/// an address they typed, or a token they were sent.
 /// </para>
 /// </remarks>
 internal sealed class ElevatedCredentialDirectory(IOptions<PersistenceOptions> options)
@@ -63,6 +64,17 @@ internal sealed class ElevatedCredentialDirectory(IOptions<PersistenceOptions> o
         LIMIT 1
         """;
 
+    /// <remarks>
+    /// No filter on consumed, invalidated, or expired, for the same reason as the reset token:
+    /// refusing a replayed link requires finding it.
+    /// </remarks>
+    private const string CompanyByEmailVerificationToken =
+        """
+        SELECT company_id FROM identity.email_verification_tokens
+        WHERE token_hash = $1
+        LIMIT 1
+        """;
+
     /// <inheritdoc />
     public Task<CompanyId?> FindCompanyByEmailAsync(Email email, CancellationToken cancellationToken)
     {
@@ -87,6 +99,15 @@ internal sealed class ElevatedCredentialDirectory(IOptions<PersistenceOptions> o
         ArgumentNullException.ThrowIfNull(tokenHash);
 
         return ResolveAsync(CompanyByPasswordResetToken, tokenHash.Value, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<CompanyId?> FindCompanyByEmailVerificationTokenAsync(
+        EmailVerificationTokenHash tokenHash, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(tokenHash);
+
+        return ResolveAsync(CompanyByEmailVerificationToken, tokenHash.Value, cancellationToken);
     }
 
     private async Task<CompanyId?> ResolveAsync(

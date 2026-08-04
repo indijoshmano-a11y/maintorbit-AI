@@ -130,6 +130,34 @@ public sealed record PasswordResetCompletion
     }
 }
 
+/// <summary>A presented email verification token (FR-AUTH-013).</summary>
+/// <remarks>
+/// Carries a live credential, so it does not print. There is no address field: the token records
+/// which address it was issued for, and one supplied here could only be used to aim a token at a
+/// different one.
+/// </remarks>
+[DebuggerDisplay("EmailVerificationRequest [REDACTED]")]
+public sealed record EmailVerificationRequest
+{
+    /// <summary>The token from the emailed link.</summary>
+    [Required(AllowEmptyStrings = false)]
+    [StringLength(512, MinimumLength = 16)]
+    public string Token { get; init; } = string.Empty;
+
+    /// <inheritdoc />
+    public override string ToString() => "EmailVerificationRequest { [REDACTED] }";
+
+    [SuppressMessage("Performance", "CA1822:Mark members as static",
+        Justification = "PrintMembers is the record-generated member the compiler calls on an " +
+                        "instance; a static one would not be used and the token would print.")]
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Append("[REDACTED]");
+        return true;
+    }
+}
+
 /// <summary>A presented second factor — a TOTP code or a recovery code (FR-AUTH-005).</summary>
 /// <remarks>
 /// Carries a live credential, so it does not print. One field for both kinds: the Employee is

@@ -64,6 +64,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddPermissionCache(services, configuration);
         AddAuthorization(services);
         AddPasswordReset(services, configuration);
+        AddEmailVerification(services, configuration);
         AddEncryption(services, configuration);
         AddMfa(services, configuration);
 
@@ -344,10 +345,39 @@ public static class InfrastructureServiceCollectionExtensions
         services.TryAddScoped<IAuthorizationRepository, AuthorizationRepository>();
         services.TryAddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.TryAddScoped<
+            IEmailVerificationTokenRepository,
+            EmailVerificationTokenRepository>();
+        services.TryAddScoped<
             ICompanyAuthenticationPolicyRepository,
             CompanyAuthenticationPolicyRepository>();
         services.TryAddScoped<IMfaEnrollmentRepository, MfaEnrollmentRepository>();
         services.TryAddScoped<IMfaRecoveryCodeRepository, MfaRecoveryCodeRepository>();
+    }
+
+    /// <summary>
+    /// Registers email verification token issuance and the notification seam (FR-AUTH-013).
+    /// </summary>
+    /// <remarks>
+    /// The factory is a singleton: it holds no per-request state, reads its settings through
+    /// <c>IOptions</c>, and its only dependency is the system random number generator.
+    /// <para>
+    /// The notifier registered here <b>does not send mail</b> — see
+    /// <see cref="UndeliveredEmailVerificationNotifier"/>. It is registered rather than omitted so
+    /// the handler composes and the gap is visible in the log, instead of the container failing at
+    /// startup for a port nothing can yet satisfy.
+    /// </para>
+    /// </remarks>
+    private static void AddEmailVerification(
+        IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<EmailVerificationOptions>()
+            .Bind(configuration.GetSection(EmailVerificationOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.TryAddSingleton<IEmailVerificationTokenFactory, EmailVerificationTokenFactory>();
+        services.TryAddSingleton<
+            IEmailVerificationNotifier, UndeliveredEmailVerificationNotifier>();
     }
 
     /// <summary>

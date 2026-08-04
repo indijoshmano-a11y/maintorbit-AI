@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using MaintOrbit.Api.Configuration;
 using MaintOrbit.Application.Abstractions.Messaging;
 using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
+using MaintOrbit.Application.Modules.Identity.Commands.EmailVerification;
 using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.Mfa;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
@@ -51,6 +52,18 @@ public static class AuthenticationEndpoints
         // do not need it.
         group.MapPost("/password-reset/request", RequestPasswordResetAsync);
         group.MapPost("/password-reset/complete", CompletePasswordResetAsync);
+
+        // Email verification (FR-AUTH-013). §3.1 lists it among this group's operations.
+        //
+        // The two halves have opposite authentication requirements, and both are forced. Issuing a
+        // link is for the caller's own address, so it needs a session — without one, a caller could
+        // have verification mail sent to anybody. Redeeming one is opened from an email in whatever
+        // browser is to hand, so it must not need a session: verification gates activation, and
+        // requiring a session would make it reachable only by people who are already active.
+        var email = group.MapGroup("/email");
+
+        email.MapPost("/verify/request", RequestEmailVerificationAsync).RequireAuthorization();
+        email.MapPost("/verify", VerifyEmailAsync);
 
         // §3.1: "MFA management requires an authenticated session". All four, including verify —
         // this is step-up within a live session, not the sign-in challenge, which needs the
@@ -293,6 +306,64 @@ public static class AuthenticationEndpoints
             "not_found" => StatusCodes.Status404NotFound,
             _ => StatusCodes.Status401Unauthorized
         });
+
+    /// <summary>
+    /// Issues a verification link for the caller's own address (FR-AUTH-013).
+    /// </summary>
+    /// <remarks>
+    /// <c>202 Accepted</c>, per §7's table for an asynchronous operation: the work that matters
+    /// happens in a message the caller cannot observe. The Employee comes from the validated token
+    /// and there is no body, so there is nothing here to point at somebody else's address.
+    /// </remarks>
+    private static async Task<IResult> RequestEmailVerificationAsync(
+        HttpContext context,
+        ICommandHandler<RequestEmailVerificationCommand> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler
+            .HandleAsync(new RequestEmailVerificationCommand(), cancellationToken)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Accepted()
+            : Problem(context, result.Error, StatusCodes.Status404NotFound);
+    }
+
+    /// <summary>
+    /// Redeems a verification link and records the address as proved (FR-AUTH-013).
+    /// </summary>
+    /// <remarks>
+    /// A missing field is <c>400 validation_failed</c>. Every other failure — unknown, expired,
+    /// already used, superseded, or issued for an address that has since changed — is one
+    /// <c>401</c> with one description, because telling them apart tells whoever is probing which
+    /// of their guesses was a real token.
+    /// </remarks>
+    private static async Task<IResult> VerifyEmailAsync(
+        EmailVerificationRequest request,
+        HttpContext context,
+        ICommandHandler<VerifyEmailCommand> handler,
+        CancellationToken cancellationToken)
+    {
+        if (Validate(request) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var result = await handler
+            .HandleAsync(new VerifyEmailCommand(request.Token), cancellationToken)
+            .ConfigureAwait(false);
+
+        if (result.IsSuccess)
+        {
+            return Results.NoContent();
+        }
+
+        var status = result.Error.Code == "validation_failed"
+            ? StatusCodes.Status400BadRequest
+            : StatusCodes.Status401Unauthorized;
+
+        return Problem(context, result.Error, status);
+    }
 
     private static async Task<IResult> SignOutAsync(
         HttpContext context,

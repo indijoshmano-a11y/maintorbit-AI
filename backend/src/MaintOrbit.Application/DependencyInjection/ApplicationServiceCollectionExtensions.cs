@@ -3,6 +3,7 @@ using MaintOrbit.Application.Modules.Identity.Commands.AcceptInvitation;
 using MaintOrbit.Application.Modules.Identity.Commands.AuthenticationPolicy;
 using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
+using MaintOrbit.Application.Modules.Identity.Commands.EmailVerification;
 using MaintOrbit.Application.Modules.Identity.Commands.EmployeeRoles;
 using MaintOrbit.Application.Modules.Identity.Commands.Login;
 using MaintOrbit.Application.Modules.Identity.Commands.Mfa;
@@ -69,6 +70,12 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             ICommandHandler<CompletePasswordResetCommand>,
             CompletePasswordResetCommandHandler>();
+
+        services.TryAddScoped<
+            ICommandHandler<RequestEmailVerificationCommand>,
+            RequestEmailVerificationCommandHandler>();
+
+        services.TryAddScoped<ICommandHandler<VerifyEmailCommand>, VerifyEmailCommandHandler>();
 
         // Not a handler: the one place a presented second factor is judged, shared by
         // verification and by disabling so the two cannot answer differently.

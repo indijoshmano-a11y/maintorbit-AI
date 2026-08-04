@@ -71,6 +71,18 @@ internal static class ValueObjectConverters
         : ValueConverter<PasswordResetTokenHash, string>(
             hash => hash.Value, value => PasswordResetTokenHash.Create(value));
 
+    /// <summary>Maps <see cref="EmailVerificationTokenId"/> to <c>uuid</c>.</summary>
+    internal sealed class EmailVerificationTokenIdConverter()
+        : ValueConverter<EmailVerificationTokenId, Guid>(
+            id => id.Value, value => new EmailVerificationTokenId(value));
+
+    /// <summary>
+    /// Maps <see cref="EmailVerificationTokenHash"/> to text. C4 material, unwrapped here only.
+    /// </summary>
+    internal sealed class EmailVerificationTokenHashConverter()
+        : ValueConverter<EmailVerificationTokenHash, string>(
+            hash => hash.Value, value => EmailVerificationTokenHash.Create(value));
+
     /// <summary>Maps <see cref="MfaEnrollmentId"/> to <c>uuid</c>.</summary>
     internal sealed class MfaEnrollmentIdConverter()
         : ValueConverter<MfaEnrollmentId, Guid>(id => id.Value, value => new MfaEnrollmentId(value));

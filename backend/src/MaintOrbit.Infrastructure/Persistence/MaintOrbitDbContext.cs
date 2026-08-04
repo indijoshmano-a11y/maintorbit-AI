@@ -61,6 +61,10 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     public DbSet<CompanyAuthenticationPolicy> CompanyAuthenticationPolicies =>
         Set<CompanyAuthenticationPolicy>();
 
+    /// <summary>Email verification requests — C4, stored only as hashes (FR-AUTH-013).</summary>
+    public DbSet<EmailVerificationToken> EmailVerificationTokens =>
+        Set<EmailVerificationToken>();
+
     /// <summary>TOTP enrolments — C4; the secret is stored only as an envelope (§4.2).</summary>
     public DbSet<MfaEnrollment> MfaEnrollments => Set<MfaEnrollment>();
 
@@ -122,6 +126,13 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
         configurationBuilder.Properties<PasswordResetTokenHash>()
             .HaveConversion<ValueObjectConverters.PasswordResetTokenHashConverter>()
             .HaveMaxLength(PasswordResetTokenHash.Length);
+
+        configurationBuilder.Properties<EmailVerificationTokenId>()
+            .HaveConversion<ValueObjectConverters.EmailVerificationTokenIdConverter>();
+
+        configurationBuilder.Properties<EmailVerificationTokenHash>()
+            .HaveConversion<ValueObjectConverters.EmailVerificationTokenHashConverter>()
+            .HaveMaxLength(EmailVerificationTokenHash.Length);
 
         configurationBuilder.Properties<MfaEnrollmentId>()
             .HaveConversion<ValueObjectConverters.MfaEnrollmentIdConverter>();
