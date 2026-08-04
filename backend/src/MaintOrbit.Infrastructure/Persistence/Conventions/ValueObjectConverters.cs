@@ -71,6 +71,20 @@ internal static class ValueObjectConverters
         : ValueConverter<PasswordResetTokenHash, string>(
             hash => hash.Value, value => PasswordResetTokenHash.Create(value));
 
+    /// <summary>Maps <see cref="MfaEnrollmentId"/> to <c>uuid</c>.</summary>
+    internal sealed class MfaEnrollmentIdConverter()
+        : ValueConverter<MfaEnrollmentId, Guid>(id => id.Value, value => new MfaEnrollmentId(value));
+
+    /// <summary>Maps <see cref="MfaRecoveryCodeId"/> to <c>uuid</c>.</summary>
+    internal sealed class MfaRecoveryCodeIdConverter()
+        : ValueConverter<MfaRecoveryCodeId, Guid>(
+            id => id.Value, value => new MfaRecoveryCodeId(value));
+
+    /// <summary>Maps <see cref="RecoveryCodeHash"/> to text. C4 material, unwrapped here only.</summary>
+    internal sealed class RecoveryCodeHashConverter()
+        : ValueConverter<RecoveryCodeHash, string>(
+            hash => hash.Value, value => RecoveryCodeHash.Create(value));
+
     /// <summary>Maps <see cref="PermissionCode"/> to text — the key itself (§1.6).</summary>
     internal sealed class PermissionCodeConverter()
         : ValueConverter<PermissionCode, string>(

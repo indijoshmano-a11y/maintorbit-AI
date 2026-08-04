@@ -130,6 +130,57 @@ public sealed record PasswordResetCompletion
     }
 }
 
+/// <summary>A presented second factor — a TOTP code or a recovery code (FR-AUTH-005).</summary>
+/// <remarks>
+/// Carries a live credential, so it does not print. One field for both kinds: the Employee is
+/// answering one question, and asking the client to decide which endpoint to call based on what
+/// was typed would move that judgement to the least informed place.
+/// </remarks>
+[DebuggerDisplay("MfaCodeRequest [REDACTED]")]
+public sealed record MfaCodeRequest
+{
+    /// <summary>A six-digit code from the authenticator app, or one of the recovery codes.</summary>
+    /// <remarks>
+    /// Bounded only to stop an unbounded body reaching the verifier. Which shape it is, and
+    /// whether it is right, are the handler's to decide — a length check here that distinguished
+    /// the two would report which kind the caller had guessed at.
+    /// </remarks>
+    [Required(AllowEmptyStrings = false)]
+    [StringLength(64, MinimumLength = 1)]
+    public string Code { get; init; } = string.Empty;
+
+    /// <inheritdoc />
+    public override string ToString() => "MfaCodeRequest { [REDACTED] }";
+
+    [SuppressMessage("Performance", "CA1822:Mark members as static",
+        Justification = "PrintMembers is the record-generated member the compiler calls on an " +
+                        "instance; a static one would not be used and the code would print.")]
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Append("[REDACTED]");
+        return true;
+    }
+}
+
+/// <summary>What an Employee needs to add the account to an authenticator app.</summary>
+/// <remarks>
+/// Returned exactly once, to the Employee it belongs to. No QR image: nothing documented calls
+/// for one, and a client that wants a QR code renders <see cref="Uri"/> locally, where the secret
+/// already is.
+/// </remarks>
+public sealed record MfaEnrollmentResponse(string Secret, string Uri);
+
+/// <summary>The recovery codes, shown once at confirmation (§3.6).</summary>
+public sealed record MfaRecoveryCodesResponse(IReadOnlyList<string> RecoveryCodes);
+
+/// <summary>The outcome of a satisfied challenge.</summary>
+/// <remarks>
+/// <c>remainingRecoveryCodes</c> is returned so an Employee can see how close they are to having
+/// none left. Running out silently is how a lost authenticator becomes a lost account.
+/// </remarks>
+public sealed record MfaVerificationResponse(bool UsedRecoveryCode, int RemainingRecoveryCodes);
+
 /// <summary>Sign-in response.</summary>
 /// <remarks>
 /// Serialized camelCase (§1.6). <c>expiresAt</c> is the access token's expiry, so a client can

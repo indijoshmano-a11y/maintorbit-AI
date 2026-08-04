@@ -57,6 +57,12 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     /// <summary>Password reset requests — C4, stored only as hashes (FR-AUTH-012).</summary>
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
+    /// <summary>TOTP enrolments — C4; the secret is stored only as an envelope (§4.2).</summary>
+    public DbSet<MfaEnrollment> MfaEnrollments => Set<MfaEnrollment>();
+
+    /// <summary>Recovery codes — C4, hashed and single-use (§3.6).</summary>
+    public DbSet<MfaRecoveryCode> MfaRecoveryCodes => Set<MfaRecoveryCode>();
+
     /// <summary>The atomic permission catalogue — platform-wide reference data (§4.2).</summary>
     public DbSet<Permission> Permissions => Set<Permission>();
 
@@ -112,6 +118,16 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
         configurationBuilder.Properties<PasswordResetTokenHash>()
             .HaveConversion<ValueObjectConverters.PasswordResetTokenHashConverter>()
             .HaveMaxLength(PasswordResetTokenHash.Length);
+
+        configurationBuilder.Properties<MfaEnrollmentId>()
+            .HaveConversion<ValueObjectConverters.MfaEnrollmentIdConverter>();
+
+        configurationBuilder.Properties<MfaRecoveryCodeId>()
+            .HaveConversion<ValueObjectConverters.MfaRecoveryCodeIdConverter>();
+
+        configurationBuilder.Properties<RecoveryCodeHash>()
+            .HaveConversion<ValueObjectConverters.RecoveryCodeHashConverter>()
+            .HaveMaxLength(RecoveryCodeHash.Length);
 
         configurationBuilder.Properties<PermissionCode>()
             .HaveConversion<ValueObjectConverters.PermissionCodeConverter>()

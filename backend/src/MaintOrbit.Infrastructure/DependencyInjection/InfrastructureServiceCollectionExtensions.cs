@@ -7,6 +7,7 @@ using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
 using MaintOrbit.Application.Abstractions.Notifications;
+using MaintOrbit.Infrastructure.Cryptography;
 using MaintOrbit.Infrastructure.MultiTenancy;
 using MaintOrbit.Infrastructure.Notifications;
 using MaintOrbit.Infrastructure.Persistence;
@@ -58,6 +59,8 @@ public static class InfrastructureServiceCollectionExtensions
         AddSessions(services, configuration);
         AddAuthorization(services);
         AddPasswordReset(services, configuration);
+        AddEncryption(services, configuration);
+        AddMfa(services, configuration);
 
         return services;
     }
@@ -250,6 +253,52 @@ public static class InfrastructureServiceCollectionExtensions
         services.TryAddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.TryAddScoped<IAuthorizationRepository, AuthorizationRepository>();
         services.TryAddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.TryAddScoped<IMfaEnrollmentRepository, MfaEnrollmentRepository>();
+        services.TryAddScoped<IMfaRecoveryCodeRepository, MfaRecoveryCodeRepository>();
+    }
+
+    /// <summary>
+    /// Registers application-layer encryption (SD-009).
+    /// </summary>
+    /// <remarks>
+    /// Validated on start, so a deployment that cannot decrypt its C4 data refuses to run rather
+    /// than discovering it on an Employee's second-factor prompt. Both registrations are
+    /// singletons: the key is decoded once, and <see cref="AesGcmEnvelopeEncryptor"/> holds no
+    /// per-request state.
+    /// </remarks>
+    private static void AddEncryption(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<EncryptionOptions>()
+            .Bind(configuration.GetSection(EncryptionOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton: ValidateDataAnnotations has already registered an
+        // IValidateOptions<EncryptionOptions>, and TryAdd would see the service type as present
+        // and silently do nothing — leaving the key checks unenforced.
+        services.AddSingleton<IValidateOptions<EncryptionOptions>, EncryptionOptionsValidator>();
+
+        services.TryAddSingleton<ICompanyDataKeyStore, DeploymentDataKeyStore>();
+        services.TryAddSingleton<IEnvelopeEncryptor, AesGcmEnvelopeEncryptor>();
+    }
+
+    /// <summary>
+    /// Registers TOTP multi-factor authentication (FR-AUTH-005).
+    /// </summary>
+    /// <remarks>
+    /// Both services are singletons — they hold no per-request state and their only dependencies
+    /// are settings and the system random number generator. Neither reaches the database; the
+    /// repositories do that, and they are scoped like every other one.
+    /// </remarks>
+    private static void AddMfa(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<MfaOptions>()
+            .Bind(configuration.GetSection(MfaOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.TryAddSingleton<ITotpService, Rfc6238TotpService>();
+        services.TryAddSingleton<IRecoveryCodeFactory, RecoveryCodeFactory>();
     }
 
     /// <summary>

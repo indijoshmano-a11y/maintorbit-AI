@@ -108,12 +108,19 @@ public sealed class DbContextRegistrationTests
                 "MaintOrbit.Domain.Modules.Identity.Entities.Employee",
                 "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeCredential",
                 "MaintOrbit.Domain.Modules.Identity.Entities.EmployeeRole",
+                "MaintOrbit.Domain.Modules.Identity.Entities.MfaEnrollment",
+                "MaintOrbit.Domain.Modules.Identity.Entities.MfaRecoveryCode",
                 "MaintOrbit.Domain.Modules.Identity.Entities.PasswordResetToken",
                 "MaintOrbit.Domain.Modules.Identity.Entities.Permission",
                 "MaintOrbit.Domain.Modules.Identity.Entities.RefreshToken",
                 "MaintOrbit.Domain.Modules.Identity.Entities.RoleDefinition",
                 "MaintOrbit.Domain.Modules.Identity.Entities.RolePermission",
-                "MaintOrbit.Domain.Modules.Identity.Entities.Session"
+                "MaintOrbit.Domain.Modules.Identity.Entities.Session",
+
+                // The owned type behind mfa_enrollments' envelope columns. It shares the table
+                // rather than having one of its own, which is why it appears in the model but not
+                // in the migration's CreateTable list.
+                "MaintOrbit.Domain.Modules.Identity.ValueObjects.SecretEnvelope"
             ],
             context.Model.GetEntityTypes().Select(entity => entity.Name).Order(StringComparer.Ordinal));
     }

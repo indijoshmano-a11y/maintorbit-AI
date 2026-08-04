@@ -165,15 +165,18 @@ public sealed class ServiceRegistrationTests
     {
         // DI-6: register against the abstraction so a caller cannot depend on an implementation
         // detail by accident. Concrete self-registration is permitted where the concrete type is
-        // the contract — DbContext, and the signing key ring, which is an internal detail shared
-        // by the token generator and validator rather than a port anything outside them uses.
+        // the contract — DbContext; the signing key ring, an internal detail shared by the token
+        // generator and validator; and the MFA challenge verifier, shared by the verify and
+        // disable handlers so the two cannot judge a presented code differently. Neither of the
+        // last two is a port anything outside its own layer uses, and an interface with one
+        // implementation and one layer of callers would be ceremony rather than a seam.
         var selfRegistered = OwnedBy(Compose())
             .Where(static descriptor => descriptor.ServiceType == descriptor.ImplementationType)
             .Select(static descriptor => descriptor.ServiceType.Name)
             .ToList();
 
         Assert.Equal(
-            ["MaintOrbitDbContext", "SigningKeyRing"],
+            ["MaintOrbitDbContext", "MfaChallengeVerifier", "SigningKeyRing"],
             selfRegistered.Order(StringComparer.Ordinal));
     }
 

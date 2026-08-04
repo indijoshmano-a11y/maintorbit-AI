@@ -3,6 +3,7 @@ using MaintOrbit.Api.Configuration;
 using MaintOrbit.Application.Abstractions.Messaging;
 using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
+using MaintOrbit.Application.Modules.Identity.Commands.Mfa;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
 using MaintOrbit.Application.Modules.Identity.Commands.SignOut;
@@ -50,6 +51,16 @@ public static class AuthenticationEndpoints
         // do not need it.
         group.MapPost("/password-reset/request", RequestPasswordResetAsync);
         group.MapPost("/password-reset/complete", CompletePasswordResetAsync);
+
+        // §3.1: "MFA management requires an authenticated session". All four, including verify —
+        // this is step-up within a live session, not the sign-in challenge, which needs the
+        // Company MFA policy FR-AUTH-006 describes and the tenancy module does not yet hold.
+        var mfa = group.MapGroup("/mfa").RequireAuthorization();
+
+        mfa.MapPost("/enroll", BeginMfaEnrollmentAsync);
+        mfa.MapPost("/confirm", ConfirmMfaEnrollmentAsync);
+        mfa.MapPost("/verify", VerifyMfaChallengeAsync);
+        mfa.MapPost("/disable", DisableMfaAsync);
 
         // Sign-out ends the session the caller presented, so it must have presented one.
         group.MapPost("/logout", SignOutAsync).RequireAuthorization();
@@ -182,6 +193,107 @@ public static class AuthenticationEndpoints
         return Problem(context, result.Error, status);
     }
 
+    /// <summary>Issues a TOTP secret for the authenticated Employee (FR-AUTH-005).</summary>
+    /// <remarks>
+    /// The Employee is taken from the validated token, never from the request. A body naming one
+    /// would let a caller enrol a factor on somebody else's account — takeover rather than
+    /// protection.
+    /// </remarks>
+    private static async Task<IResult> BeginMfaEnrollmentAsync(
+        HttpContext context,
+        ICommandHandler<BeginMfaEnrollmentCommand, MfaEnrollmentSecret> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler
+            .HandleAsync(new BeginMfaEnrollmentCommand(), cancellationToken)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(new MfaEnrollmentResponse(result.Value.Secret, result.Value.Uri))
+            : MfaProblem(context, result.Error);
+    }
+
+    /// <summary>Proves possession and turns the factor on, returning the recovery codes once.</summary>
+    private static async Task<IResult> ConfirmMfaEnrollmentAsync(
+        MfaCodeRequest request,
+        HttpContext context,
+        ICommandHandler<ConfirmMfaEnrollmentCommand, MfaRecoveryCodes> handler,
+        CancellationToken cancellationToken)
+    {
+        if (Validate(request) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var result = await handler
+            .HandleAsync(new ConfirmMfaEnrollmentCommand(request.Code), cancellationToken)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(new MfaRecoveryCodesResponse(result.Value.Codes))
+            : MfaProblem(context, result.Error);
+    }
+
+    /// <summary>Satisfies a second-factor challenge with a TOTP code or a recovery code.</summary>
+    private static async Task<IResult> VerifyMfaChallengeAsync(
+        MfaCodeRequest request,
+        HttpContext context,
+        ICommandHandler<VerifyMfaChallengeCommand, MfaVerification> handler,
+        CancellationToken cancellationToken)
+    {
+        if (Validate(request) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var result = await handler
+            .HandleAsync(new VerifyMfaChallengeCommand(request.Code), cancellationToken)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(new MfaVerificationResponse(
+                result.Value.UsedRecoveryCode, result.Value.RemainingRecoveryCodes))
+            : MfaProblem(context, result.Error);
+    }
+
+    /// <summary>Turns the second factor off, against a current code.</summary>
+    private static async Task<IResult> DisableMfaAsync(
+        MfaCodeRequest request,
+        HttpContext context,
+        ICommandHandler<DisableMfaCommand> handler,
+        CancellationToken cancellationToken)
+    {
+        if (Validate(request) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var result = await handler
+            .HandleAsync(new DisableMfaCommand(request.Code), cancellationToken)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess ? Results.NoContent() : MfaProblem(context, result.Error);
+    }
+
+    /// <summary>
+    /// Maps an MFA failure to its documented status.
+    /// </summary>
+    /// <remarks>
+    /// §7's table: <c>validation_failed</c> is 400, <c>conflict</c> is 409, and
+    /// <c>authentication_failed</c> is 401. A wrong code, a replayed one, and a reused recovery
+    /// code are all the last of those with one description — telling them apart would say which
+    /// guess was close, and "that code was right but already spent" is the most useful thing an
+    /// attacker could learn.
+    /// </remarks>
+    private static IResult MfaProblem(HttpContext context, Error error) =>
+        Problem(context, error, error.Code switch
+        {
+            "validation_failed" => StatusCodes.Status400BadRequest,
+            "conflict" => StatusCodes.Status409Conflict,
+            "not_found" => StatusCodes.Status404NotFound,
+            _ => StatusCodes.Status401Unauthorized
+        });
+
     private static async Task<IResult> SignOutAsync(
         HttpContext context,
         ICommandHandler<SignOutCommand> handler,
@@ -277,9 +389,13 @@ public static class AuthenticationEndpoints
         var problem = new ProblemDetails
         {
             Type = error.Code,
-            Title = error.Code == "validation_failed"
-                ? "The request is not valid"
-                : "Authentication failed",
+            Title = error.Code switch
+            {
+                "validation_failed" => "The request is not valid",
+                "conflict" => "The request conflicts with the current state",
+                "not_found" => "Not found",
+                _ => "Authentication failed"
+            },
             Status = statusCode,
             Detail = error.Description
         };

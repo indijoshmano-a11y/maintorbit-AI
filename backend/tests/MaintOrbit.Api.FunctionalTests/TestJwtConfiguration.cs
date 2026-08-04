@@ -43,14 +43,23 @@ internal static class TestJwtConfiguration
         },
         LazyThreadSafetyMode.ExecutionAndPublication);
 
-    /// <summary>Configuration entries a test host needs to satisfy JWT startup validation.</summary>
+    /// <summary>
+    /// Configuration entries a test host needs to get past startup validation.
+    /// </summary>
+    /// <remarks>
+    /// The signing key and the data encryption key sit together because they are the same kind of
+    /// thing: validated on start, no default, and required by every host that composes
+    /// infrastructure. A host built for an unrelated test should not have to know that MFA exists
+    /// in order to start.
+    /// </remarks>
     public static IEnumerable<KeyValuePair<string, string?>> Settings =>
     [
         new("Jwt:Issuer", "https://api.maintorbit.test"),
         new("Jwt:Audience", "maintorbit-api"),
         new("Jwt:AccessTokenLifetimeMinutes", "15"),
         new("Jwt:SigningKey:KeyId", "test-key"),
-        new("Jwt:SigningKey:PrivateKeyPem", PrivateKeyPem.Value)
+        new("Jwt:SigningKey:PrivateKeyPem", PrivateKeyPem.Value),
+        new("Encryption:DataKey", TestEncryptionKey.Base64)
     ];
 
     /// <summary>Adds those entries to an existing settings dictionary.</summary>

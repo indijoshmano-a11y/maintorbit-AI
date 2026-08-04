@@ -3,6 +3,7 @@ using MaintOrbit.Application.Modules.Identity.Commands.AcceptInvitation;
 using MaintOrbit.Application.Modules.Identity.Commands.CompletePasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.RequestPasswordReset;
 using MaintOrbit.Application.Modules.Identity.Commands.Login;
+using MaintOrbit.Application.Modules.Identity.Commands.Mfa;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
 using MaintOrbit.Application.Modules.Identity.Commands.SignOut;
@@ -64,6 +65,24 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             ICommandHandler<CompletePasswordResetCommand>,
             CompletePasswordResetCommandHandler>();
+
+        // Not a handler: the one place a presented second factor is judged, shared by
+        // verification and by disabling so the two cannot answer differently.
+        services.TryAddScoped<MfaChallengeVerifier>();
+
+        services.TryAddScoped<
+            ICommandHandler<BeginMfaEnrollmentCommand, MfaEnrollmentSecret>,
+            BeginMfaEnrollmentCommandHandler>();
+
+        services.TryAddScoped<
+            ICommandHandler<ConfirmMfaEnrollmentCommand, MfaRecoveryCodes>,
+            ConfirmMfaEnrollmentCommandHandler>();
+
+        services.TryAddScoped<
+            ICommandHandler<VerifyMfaChallengeCommand, MfaVerification>,
+            VerifyMfaChallengeCommandHandler>();
+
+        services.TryAddScoped<ICommandHandler<DisableMfaCommand>, DisableMfaCommandHandler>();
 
         services.TryAddScoped<ICommandHandler<SignOutCommand>, SignOutCommandHandler>();
         services.TryAddScoped<
