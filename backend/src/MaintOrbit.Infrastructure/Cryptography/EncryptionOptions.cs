@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
 
 namespace MaintOrbit.Infrastructure.Cryptography;
@@ -59,22 +60,38 @@ internal sealed class EncryptionOptionsValidator : IValidateOptions<EncryptionOp
                 "Supply a base64 AES-256 key from the environment or a mounted secret.");
         }
 
-        if (!Convert.TryFromBase64String(
-                options.DataKey, new byte[EncryptionOptions.KeyLength + 1], out var written))
-        {
-            return ValidateOptionsResult.Fail(
-                $"{EncryptionOptions.SectionName}:{nameof(EncryptionOptions.DataKey)} is not base64.");
-        }
+        // Sized to hold whatever the input decodes to, not to the key length. TryFromBase64String
+        // also returns false when the destination is merely too small, so a buffer sized to the
+        // expected key reports a 64-byte key as "not base64" — which sends an operator looking for
+        // a corrupted value instead of the wrong one. Both still fail closed; only one is
+        // actionable. Base64 never expands beyond three bytes per four characters.
+        var decoded = new byte[((options.DataKey.Length / 4) + 1) * 3];
 
-        if (written != EncryptionOptions.KeyLength)
+        try
         {
-            // SD-009 fixes AES-256. A shorter key would silently select a weaker cipher, or throw
-            // at the first encryption — long after the deployment was declared healthy.
-            return ValidateOptionsResult.Fail(
-                $"{EncryptionOptions.SectionName}:{nameof(EncryptionOptions.DataKey)} must decode " +
-                $"to {EncryptionOptions.KeyLength} bytes for AES-256; it decodes to {written}.");
-        }
+            if (!Convert.TryFromBase64String(options.DataKey, decoded, out var written))
+            {
+                return ValidateOptionsResult.Fail(
+                    $"{EncryptionOptions.SectionName}:{nameof(EncryptionOptions.DataKey)} is not base64.");
+            }
 
-        return ValidateOptionsResult.Success;
+            if (written != EncryptionOptions.KeyLength)
+            {
+                // SD-009 fixes AES-256. A shorter key would silently select a weaker cipher, or
+                // throw at the first encryption — long after the deployment was declared healthy.
+                return ValidateOptionsResult.Fail(
+                    $"{EncryptionOptions.SectionName}:{nameof(EncryptionOptions.DataKey)} must decode " +
+                    $"to {EncryptionOptions.KeyLength} bytes for AES-256; it decodes to {written}.");
+            }
+
+            return ValidateOptionsResult.Success;
+        }
+        finally
+        {
+            // This buffer held the deployment's data key. Validation runs once at startup, so the
+            // array would otherwise sit on the heap for the process lifetime with nothing
+            // referencing it — present in any dump taken afterwards, for no benefit at all.
+            CryptographicOperations.ZeroMemory(decoded);
+        }
     }
 }
