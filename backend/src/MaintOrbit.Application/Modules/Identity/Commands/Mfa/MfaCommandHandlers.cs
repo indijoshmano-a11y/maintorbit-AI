@@ -9,6 +9,9 @@ using MaintOrbit.Domain.Modules.Identity.Enums;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 using Microsoft.Extensions.Options;
 
+using MaintOrbit.Application.Abstractions.Auditing;
+using MaintOrbit.Shared.Auditing;
+
 namespace MaintOrbit.Application.Modules.Identity.Commands.Mfa;
 
 /// <summary>
@@ -30,6 +33,7 @@ public sealed class BeginMfaEnrollmentCommandHandler(
     IEnvelopeEncryptor encryptor,
     ITotpService totp,
     IEmployeeRepository employees,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     IOptions<MfaOptions> options,
     TimeProvider timeProvider)
@@ -93,6 +97,13 @@ public sealed class BeginMfaEnrollmentCommandHandler(
 
             await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+            await audit.RecordAsync(
+                AuditActions.MfaEnrollmentBegun,
+                AuditOutcome.Success,
+                AuditTargets.MfaEnrollment,
+                enrollment.Id.ToString(),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
             return Result.Success(new MfaEnrollmentSecret(
                 totp.Encode(secret),
                 BuildUri(totp.Encode(secret), employee.Email.Value, options.Value.Issuer)));
@@ -136,6 +147,7 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
     IEnvelopeEncryptor encryptor,
     ITotpService totp,
     IRecoveryCodeFactory recoveryCodes,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<ConfirmMfaEnrollmentCommand, MfaRecoveryCodes>
@@ -184,6 +196,13 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
         // turned around and replayed as a verification.
         if (!valid || !enrollment.TryConfirm(totp.TimeStepAt(now), now))
         {
+            await audit.RecordAsync(
+                AuditActions.MfaEnrollmentConfirmed,
+                AuditOutcome.Failure,
+                AuditTargets.MfaEnrollment,
+                enrollment.Id.ToString(),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
             return Refused();
         }
 
@@ -196,6 +215,13 @@ public sealed class ConfirmMfaEnrollmentCommandHandler(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await audit.RecordAsync(
+            AuditActions.MfaEnrollmentConfirmed,
+            AuditOutcome.Success,
+            AuditTargets.MfaEnrollment,
+            enrollment.Id.ToString(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // The only time these exist. Nothing stores the plaintext.
         return Result.Success(new MfaRecoveryCodes([.. issued.Select(code => code.Code)]));
@@ -220,6 +246,7 @@ public sealed class VerifyMfaChallengeCommandHandler(
     IMfaEnrollmentRepository enrollments,
     IMfaRecoveryCodeRepository codes,
     MfaChallengeVerifier verifier,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<VerifyMfaChallengeCommand, MfaVerification>
@@ -260,17 +287,50 @@ public sealed class VerifyMfaChallengeCommandHandler(
             // spendable, and the aggregate only marks what it actually consumed.
             await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+            await AuditChallengeAsync(
+                audit, enrollment.Id.ToString(), AuditOutcome.Failure,
+                usedRecoveryCode: false, cancellationToken).ConfigureAwait(false);
+
             return Result.Failure<MfaVerification>(
                 Error.AuthenticationFailed("The code is not valid."));
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        await AuditChallengeAsync(
+            audit, enrollment.Id.ToString(), AuditOutcome.Success,
+            outcome.UsedRecoveryCode, cancellationToken).ConfigureAwait(false);
+
         var remaining = await codes.CountUnusedAsync(enrollment.Id, cancellationToken)
             .ConfigureAwait(false);
 
         return Result.Success(new MfaVerification(outcome.UsedRecoveryCode, remaining));
     }
+
+    /// <summary>
+    /// Records a second-factor challenge, noting whether a recovery code was spent.
+    /// </summary>
+    /// <remarks>
+    /// §3.4 lists "MFA challenge" among the authentication events. Whether a recovery code was used
+    /// is worth recording separately: a run of recovery-code authentications is somebody who has
+    /// lost their authenticator, or somebody who never had it.
+    /// </remarks>
+    private static Task AuditChallengeAsync(
+        IAuditTrail audit,
+        string enrollmentId,
+        AuditOutcome outcome,
+        bool usedRecoveryCode,
+        CancellationToken cancellationToken) =>
+        audit.RecordAsync(
+            AuditActions.MfaChallenge,
+            outcome,
+            AuditTargets.MfaEnrollment,
+            enrollmentId,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["usedRecoveryCode"] = usedRecoveryCode ? bool.TrueString : bool.FalseString
+            },
+            cancellationToken);
 }
 
 /// <summary>
@@ -290,6 +350,7 @@ public sealed class DisableMfaCommandHandler(
     IMfaEnrollmentRepository enrollments,
     IMfaRecoveryCodeRepository codes,
     MfaChallengeVerifier verifier,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<DisableMfaCommand>
@@ -325,6 +386,13 @@ public sealed class DisableMfaCommandHandler(
         {
             await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+            await audit.RecordAsync(
+                AuditActions.MfaDisabled,
+                AuditOutcome.Failure,
+                AuditTargets.MfaEnrollment,
+                enrollment.Id.ToString(),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
             return Result.Failure(Error.AuthenticationFailed("The code is not valid."));
         }
 
@@ -334,6 +402,15 @@ public sealed class DisableMfaCommandHandler(
             .ConfigureAwait(false);
 
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        // Turning a second factor off is the operation §3.6 singles out for step-up, so it is the
+        // one an investigation looks for first.
+        await audit.RecordAsync(
+            AuditActions.MfaDisabled,
+            AuditOutcome.Success,
+            AuditTargets.MfaEnrollment,
+            enrollment.Id.ToString(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return Result.Success();
     }

@@ -33,6 +33,8 @@ public sealed class LoginTests
 
         public CountingUnitOfWork UnitOfWork { get; } = new();
 
+        public RecordingAuditTrail Audit { get; } = new();
+
         /// <summary>The policy the lockout tests drive from.</summary>
         /// <remarks>
         /// Three attempts and fifteen minutes, so the threshold is reached quickly and the
@@ -47,7 +49,7 @@ public sealed class LoginTests
 
         public LoginCommandHandler Handler() =>
             new(Employees, Credentials, Hasher, new FakeDecoy(),
-                new FixedAuthenticationPolicy(Policy), UnitOfWork, new FakeClock(Clock));
+                new FixedAuthenticationPolicy(Policy), Audit, UnitOfWork, new FakeClock(Clock));
 
         public Employee GivenEmployee(EmployeeStatus status)
         {

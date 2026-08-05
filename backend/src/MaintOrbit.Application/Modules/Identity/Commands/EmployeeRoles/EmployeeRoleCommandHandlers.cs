@@ -10,6 +10,9 @@ using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 using MaintOrbit.Shared.MultiTenancy;
 using Microsoft.Extensions.Logging;
 
+using MaintOrbit.Application.Abstractions.Auditing;
+using MaintOrbit.Shared.Auditing;
+
 namespace MaintOrbit.Application.Modules.Identity.Commands.EmployeeRoles;
 
 /// <summary>
@@ -32,6 +35,7 @@ public sealed partial class AssignRoleCommandHandler(
     IEmployeeRepository employees,
     IAuthorizationRepository authorization,
     IPermissionCache cache,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
     ILogger<AssignRoleCommandHandler> logger)
@@ -121,6 +125,23 @@ public sealed partial class AssignRoleCommandHandler(
         await InvalidateAsync(cache, logger, employeeId, employee.CompanyId, cancellationToken)
             .ConfigureAwait(false);
 
+        // §3.4 audits "role changes" under Organizational, and a role assignment is the change an
+        // investigation traces backwards from a permission somebody should not have had. The role
+        // code is recorded because that is what was granted — this is a record of a change, not an
+        // authorization decision, so SD-020's rule against branching on a role name does not apply.
+        await audit.RecordAsync(
+            AuditActions.RoleAssigned,
+            AuditOutcome.Success,
+            AuditTargets.RoleAssignment,
+            assignment.Id.ToString(),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["employeeId"] = employeeId.ToString(),
+                ["roleCode"] = roleCode.Value,
+                ["scope"] = scope.ToString()
+            },
+            cancellationToken).ConfigureAwait(false);
+
         return Result.Success(new AssignedRole(
             assignment.Id,
             employeeId.Value,
@@ -193,6 +214,7 @@ public sealed partial class AssignRoleCommandHandler(
 public sealed class RemoveRoleCommandHandler(
     IAuthorizationRepository authorization,
     IPermissionCache cache,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     ILogger<RemoveRoleCommandHandler> logger)
     : ICommandHandler<RemoveRoleCommand>
@@ -227,6 +249,19 @@ public sealed class RemoveRoleCommandHandler(
         await AssignRoleCommandHandler
             .InvalidateAsync(cache, logger, assignment.EmployeeId, assignment.CompanyId, cancellationToken)
             .ConfigureAwait(false);
+
+        await audit.RecordAsync(
+            AuditActions.RoleRemoved,
+            AuditOutcome.Success,
+            AuditTargets.RoleAssignment,
+            assignment.Id.ToString(),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["employeeId"] = assignment.EmployeeId.ToString(),
+                ["roleCode"] = assignment.RoleCode.Value,
+                ["scope"] = assignment.ScopeType.ToString()
+            },
+            cancellationToken).ConfigureAwait(false);
 
         return Result.Success();
     }

@@ -10,6 +10,9 @@ using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 using MaintOrbit.Shared.MultiTenancy;
 using Microsoft.Extensions.Options;
 
+using MaintOrbit.Application.Abstractions.Auditing;
+using MaintOrbit.Shared.Auditing;
+
 namespace MaintOrbit.Application.Modules.Identity.Commands.SignIn;
 
 /// <summary>
@@ -43,6 +46,7 @@ public sealed class SignInCommandHandler(
     IUnitOfWork unitOfWork,
     IAuthenticationPolicyProvider policies,
     IOptions<RefreshTokenOptions> refreshOptions,
+    IAuditTrail audit,
     TimeProvider timeProvider)
     : ICommandHandler<SignInCommand, SignInResult>
 {
@@ -71,6 +75,13 @@ public sealed class SignInCommandHandler(
             // No Company holds this address. The login handler is still invoked, under a scope that
             // matches nothing, so the request costs what a real attempt costs — see the remarks.
             await AuthenticateUnderNoTenantAsync(command, cancellationToken).ConfigureAwait(false);
+
+            // FR-AUTH-014 audits failures as well as successes, and this is the one an attacker
+            // generates: no Company, no Employee, and the attempted address recorded because an
+            // audit record is not a response and enumeration is not a concern here.
+            await AuditFailureAsync(command.Email, companyId: null, cancellationToken)
+                .ConfigureAwait(false);
+
             return Rejected();
         }
 
@@ -82,6 +93,9 @@ public sealed class SignInCommandHandler(
 
         if (authenticated.IsFailure)
         {
+            await AuditFailureAsync(command.Email, companyId.Value, cancellationToken)
+                .ConfigureAwait(false);
+
             return Rejected();
         }
 
@@ -121,8 +135,50 @@ public sealed class SignInCommandHandler(
         // session authenticates nothing.
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        await audit.RecordAsync(
+            AuditActions.SignIn,
+            AuditOutcome.Success,
+            AuditTargets.Session,
+            session.Id.ToString(),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                // The client type and device label are the Employee's own descriptive fields, not
+                // content (AU-4) — they are what makes a device list readable afterwards.
+                ["clientType"] = command.ClientType.ToString(),
+                ["employeeId"] = identity.EmployeeId.ToString()
+            },
+            cancellationToken).ConfigureAwait(false);
+
         return Result.Success(new SignInResult(accessToken, issued.Token, session.Id));
     }
+
+    /// <summary>
+    /// Records a failed sign-in against whatever actor could be resolved.
+    /// </summary>
+    /// <remarks>
+    /// Built explicitly rather than through the ambient overload: there is no validated identity at
+    /// this point, so the trail has nothing to read. The attempted address is recorded because
+    /// FR-AUTH-014 audits the attempt, and §3.4 makes a burst of them a detection signal — which
+    /// only works if the records say which address was tried.
+    /// </remarks>
+    private Task AuditFailureAsync(
+        string? attemptedEmail, CompanyId? companyId, CancellationToken cancellationToken) =>
+        audit.RecordAsync(
+            new AuditEvent(
+                timeProvider.GetUtcNow(),
+                AuditActions.SignIn,
+                AuditOutcome.Failure,
+                AuditActorType.Anonymous,
+                companyId?.Value,
+                ActorEmployeeId: null,
+                AuditTargets.Employee,
+                TargetId: null,
+                CorrelationId: null,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["attemptedEmail"] = attemptedEmail ?? string.Empty
+                }),
+            cancellationToken);
 
     /// <summary>
     /// Runs the credential check for an address no Company holds, and discards the outcome.

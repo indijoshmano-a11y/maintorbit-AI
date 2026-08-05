@@ -7,6 +7,9 @@ using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 using MaintOrbit.Shared.MultiTenancy;
 
+using MaintOrbit.Application.Abstractions.Auditing;
+using MaintOrbit.Shared.Auditing;
+
 namespace MaintOrbit.Application.Modules.Identity.Commands.Login;
 
 /// <summary>
@@ -50,6 +53,7 @@ public sealed class LoginCommandHandler(
     IPasswordHasher passwordHasher,
     IDecoyPasswordHash decoy,
     IAuthenticationPolicyProvider policies,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<LoginCommand, AuthenticationResult>
@@ -154,10 +158,33 @@ public sealed class LoginCommandHandler(
     {
         var policy = await policies.GetAsync(companyId, cancellationToken).ConfigureAwait(false);
 
-        credential.RecordFailedAttempt(
+        var locked = credential.RecordFailedAttempt(
             policy.MaximumFailedAttempts, TimeSpan.FromMinutes(policy.LockoutMinutes), now);
 
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        if (locked)
+        {
+            // §3.4 lists lockout among the authentication events, separately from the failures
+            // that led to it — one record says "this account is now locked", which is what an
+            // alert fires on. The individual failures are audited by the sign-in path.
+            await audit.RecordAsync(
+                new AuditEvent(
+                    now,
+                    AuditActions.AccountLockout,
+                    AuditOutcome.Success,
+                    AuditActorType.System,
+                    companyId.Value,
+                    credential.EmployeeId.Value,
+                    AuditTargets.Employee,
+                    credential.EmployeeId.ToString(),
+                    CorrelationId: null,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["until"] = credential.LockoutUntilUtc?.ToString("O") ?? string.Empty
+                    }),
+                cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

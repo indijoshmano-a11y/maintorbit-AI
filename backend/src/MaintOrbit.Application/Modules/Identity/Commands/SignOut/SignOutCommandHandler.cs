@@ -5,6 +5,9 @@ using MaintOrbit.Domain.Common.Results;
 using MaintOrbit.Domain.Modules.Identity.Enums;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 
+using MaintOrbit.Application.Abstractions.Auditing;
+using MaintOrbit.Shared.Auditing;
+
 namespace MaintOrbit.Application.Modules.Identity.Commands.SignOut;
 
 /// <summary>
@@ -23,6 +26,7 @@ namespace MaintOrbit.Application.Modules.Identity.Commands.SignOut;
 public sealed class SignOutCommandHandler(
     ICurrentIdentity currentIdentity,
     ISessionRepository sessions,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<SignOutCommand>
@@ -45,6 +49,15 @@ public sealed class SignOutCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        // §3.4 audits session termination alongside authentication. Emitted after the commit, so
+        // the record describes what actually happened rather than what was about to.
+        await audit.RecordAsync(
+            AuditActions.SignOut,
+            AuditOutcome.Success,
+            AuditTargets.Session,
+            sessionId.ToString(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
         return Result.Success();
     }
 }
@@ -60,6 +73,7 @@ public sealed class SignOutCommandHandler(
 public sealed class SignOutEverywhereCommandHandler(
     ICurrentIdentity currentIdentity,
     ISessionRepository sessions,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<SignOutEverywhereCommand>
@@ -72,7 +86,7 @@ public sealed class SignOutEverywhereCommandHandler(
         // Set-based: an Employee may hold many sessions, and loading each one to write a single
         // column would read an unbounded set into memory. Row-level security still applies, so
         // this reaches only the Company in scope.
-        await sessions
+        var revoked = await sessions
             .RevokeAllForEmployeeAsync(
                 employeeId,
                 SessionRevocationReason.TerminatedByEmployee,
@@ -81,6 +95,17 @@ public sealed class SignOutEverywhereCommandHandler(
             .ConfigureAwait(false);
 
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await audit.RecordAsync(
+            AuditActions.SignOutEverywhere,
+            AuditOutcome.Success,
+            AuditTargets.Employee,
+            employeeId.ToString(),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["revokedCount"] = revoked.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            },
+            cancellationToken).ConfigureAwait(false);
 
         return Result.Success();
     }

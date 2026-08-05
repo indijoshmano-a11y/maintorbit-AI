@@ -150,6 +150,31 @@ public static class AuthenticationServiceCollectionExtensions
             return;
         }
 
+        // FR-PERM-004: every denial produces an audit event, and §3.4 calls denials "a primary
+        // detection signal — a burst from one identity is a privilege-escalation attempt in
+        // progress". Recorded here rather than in the authorization handler because this is where
+        // the denial becomes the response: a handler that declined to succeed has not necessarily
+        // denied anything, since another policy might still have granted it.
+        //
+        // The permission that was missing is deliberately not recorded here. The endpoint is, which
+        // is enough to reconstruct it, and the response must not name it (see below).
+        var audit = context.HttpContext.RequestServices
+            .GetService<Application.Abstractions.Auditing.IAuditTrail>();
+
+        if (audit is not null)
+        {
+            await audit.RecordAsync(
+                MaintOrbit.Shared.Auditing.AuditActions.PermissionDenied,
+                MaintOrbit.Shared.Auditing.AuditOutcome.Denied,
+                MaintOrbit.Shared.Auditing.AuditTargets.Endpoint,
+                context.HttpContext.Request.Path.Value,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["method"] = context.HttpContext.Request.Method
+                },
+                context.HttpContext.RequestAborted).ConfigureAwait(false);
+        }
+
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         context.Response.ContentType = "application/problem+json";
 

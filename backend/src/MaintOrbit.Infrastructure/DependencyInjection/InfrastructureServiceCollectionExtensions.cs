@@ -1,3 +1,4 @@
+using MaintOrbit.Application.Abstractions.Auditing;
 using MaintOrbit.Application.Abstractions.Authorization;
 using MaintOrbit.Application.Abstractions.Persistence;
 using MaintOrbit.Infrastructure.Authorization;
@@ -7,6 +8,7 @@ using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
 using MaintOrbit.Application.Abstractions.Notifications;
+using MaintOrbit.Infrastructure.Auditing;
 using MaintOrbit.Infrastructure.Caching;
 using MaintOrbit.Infrastructure.Cryptography;
 using MaintOrbit.Infrastructure.MultiTenancy;
@@ -61,6 +63,7 @@ public static class InfrastructureServiceCollectionExtensions
         AddAccessTokens(services, configuration);
         AddSessions(services, configuration);
         AddAuthenticationPolicy(services, configuration);
+        AddAuditing(services);
         AddPermissionCache(services, configuration);
         AddAuthorization(services);
         AddPasswordReset(services, configuration);
@@ -209,6 +212,20 @@ public static class InfrastructureServiceCollectionExtensions
             AuthenticationPolicyDefaultsValidator>();
 
         services.TryAddScoped<IAuthenticationPolicyProvider, AuthenticationPolicyProvider>();
+    }
+
+    /// <summary>
+    /// Registers audit emission (FR-AUTH-014, FR-PERM-004).
+    /// </summary>
+    /// <remarks>
+    /// Scoped, because the trail reads the request's identity and correlation identifier. The sink
+    /// is the seam the <c>auditing</c> module replaces; what is registered today writes to the
+    /// structured log and is named so nobody mistakes it for the append-only store.
+    /// </remarks>
+    private static void AddAuditing(IServiceCollection services)
+    {
+        services.TryAddSingleton<IAuditSink, LoggingAuditSink>();
+        services.TryAddScoped<IAuditTrail, AuditTrail>();
     }
 
     /// <summary>

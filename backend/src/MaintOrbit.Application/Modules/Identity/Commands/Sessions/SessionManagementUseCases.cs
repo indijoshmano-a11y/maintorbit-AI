@@ -7,6 +7,9 @@ using MaintOrbit.Domain.Modules.Identity.Enums;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 
+using MaintOrbit.Application.Abstractions.Auditing;
+using MaintOrbit.Shared.Auditing;
+
 namespace MaintOrbit.Application.Modules.Identity.Commands.Sessions;
 
 /// <summary>One of the caller's own sessions, as their device list shows it.</summary>
@@ -165,6 +168,7 @@ public sealed class GetCurrentSessionQueryHandler(
 public sealed class RevokeSessionCommandHandler(
     ICurrentIdentity currentIdentity,
     ISessionRepository sessions,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<RevokeSessionCommand>
@@ -193,6 +197,16 @@ public sealed class RevokeSessionCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        await audit.RecordAsync(
+            AuditActions.SessionRevoked,
+            AuditOutcome.Success,
+            AuditTargets.Session,
+            // The value object's format, not the raw Guid's — every other identifier in an audit
+            // record is written this way, and a trail that formatted one of them differently would
+            // not join to the others.
+            session.Id.ToString(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
         return Result.Success();
     }
 }
@@ -201,6 +215,7 @@ public sealed class RevokeSessionCommandHandler(
 public sealed class RevokeOtherSessionsCommandHandler(
     ICurrentIdentity currentIdentity,
     ISessionRepository sessions,
+    IAuditTrail audit,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider)
     : ICommandHandler<RevokeOtherSessionsCommand, int>
@@ -224,6 +239,17 @@ public sealed class RevokeOtherSessionsCommandHandler(
         // reason every other handler has one: when the ADR-0012 pipeline wraps this in a
         // transaction, the boundary is already where it belongs.
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await audit.RecordAsync(
+            AuditActions.OtherSessionsRevoked,
+            AuditOutcome.Success,
+            AuditTargets.Employee,
+            employeeId.ToString(),
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["revokedCount"] = revoked.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            },
+            cancellationToken).ConfigureAwait(false);
 
         return Result.Success(revoked);
     }
