@@ -9,6 +9,7 @@ using MaintOrbit.Application.Modules.Identity.Commands.Login;
 using MaintOrbit.Application.Modules.Identity.Commands.Mfa;
 using MaintOrbit.Application.Modules.Identity.Commands.RotateRefreshToken;
 using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
+using MaintOrbit.Application.Modules.Identity.Commands.Sessions;
 using MaintOrbit.Application.Modules.Identity.Commands.SignOut;
 using MaintOrbit.Application.Modules.Identity.Queries.EmployeeRoles;
 using MaintOrbit.Application.Modules.Identity.Queries.Employees;
@@ -95,6 +96,14 @@ public static class ApplicationServiceCollectionExtensions
 
         services.TryAddScoped<ICommandHandler<DisableMfaCommand>, DisableMfaCommandHandler>();
 
+        services.TryAddScoped<ICommandHandler<RevokeSessionCommand>, RevokeSessionCommandHandler>();
+        services.TryAddScoped<
+            ICommandHandler<RevokeOtherSessionsCommand, int>,
+            RevokeOtherSessionsCommandHandler>();
+        services.TryAddScoped<
+            ICommandHandler<RecordSessionActivityCommand>,
+            RecordSessionActivityCommandHandler>();
+
         services.TryAddScoped<ICommandHandler<SignOutCommand>, SignOutCommandHandler>();
         services.TryAddScoped<
             ICommandHandler<SignOutEverywhereCommand>,
@@ -128,6 +137,14 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             IQueryHandler<GetAuthenticationPolicyQuery, AuthenticationPolicyView>,
             GetAuthenticationPolicyQueryHandler>();
+
+        services.TryAddScoped<
+            IQueryHandler<ListSessionsQuery, IReadOnlyList<EmployeeSession>>,
+            ListSessionsQueryHandler>();
+
+        services.TryAddScoped<
+            IQueryHandler<GetCurrentSessionQuery, EmployeeSession>,
+            GetCurrentSessionQueryHandler>();
 
         return services;
     }

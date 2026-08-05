@@ -39,6 +39,7 @@ app.MapAuthenticationEndpoints();
 app.MapEmployeeEndpoints();
 app.MapEmployeeRoleEndpoints();
 app.MapAuthenticationPolicyEndpoints();
+app.MapSessionEndpoints();
 
 app.Run();
 

@@ -310,6 +310,21 @@ public sealed class RefreshTokenRotationTests
     {
         private readonly List<Session> _sessions = [];
 
+        // Unused by rotation. The device-list endpoints have their own tests, against a real
+        // database — a fake that paged an in-memory list would assert nothing about row-level
+        // security, which is the only interesting thing about listing somebody's sessions.
+        public Task<IReadOnlyList<Session>> ListUnrevokedForEmployeeAsync(
+            EmployeeId employeeId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<int> RevokeAllForEmployeeExceptAsync(
+            EmployeeId employeeId,
+            SessionId except,
+            SessionRevocationReason reason,
+            DateTimeOffset revokedAtUtc,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Session?> FindAsync(SessionId id, CancellationToken cancellationToken) =>
             Task.FromResult(_sessions.FirstOrDefault(s => s.Id == id));
 

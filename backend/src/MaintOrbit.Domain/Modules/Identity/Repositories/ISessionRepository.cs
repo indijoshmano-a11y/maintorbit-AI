@@ -19,6 +19,42 @@ public interface ISessionRepository
     void Add(Session session);
 
     /// <summary>
+    /// Every unrevoked session an Employee holds, newest first.
+    /// </summary>
+    /// <remarks>
+    /// <b>Unrevoked, not active.</b> Whether a session is still within its idle window depends on
+    /// the Company's policy (FR-AUTH-007), which this layer does not hold — so the repository
+    /// returns what is not explicitly ended and the caller applies the timers. Filtering here with
+    /// a guessed window would show a different list than the one the session validator honours.
+    /// <para>
+    /// Tenant filtering is absent for the same reason as every other read here: row-level security
+    /// applies it below the application layer.
+    /// </para>
+    /// </remarks>
+    Task<IReadOnlyList<Session>> ListUnrevokedForEmployeeAsync(
+        EmployeeId employeeId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Revokes every unrevoked session an Employee holds except one.
+    /// </summary>
+    /// <remarks>
+    /// §3.5's "Employee terminates all others — all except current". The exclusion is the whole
+    /// point: an Employee clearing their other devices should not have to sign in again on the one
+    /// they are using, and a caller that had to re-authenticate afterwards would learn to avoid
+    /// the feature.
+    /// <para>
+    /// Set-based: an Employee may hold many sessions, and loading each to write one column would
+    /// read an unbounded set into memory.
+    /// </para>
+    /// </remarks>
+    Task<int> RevokeAllForEmployeeExceptAsync(
+        EmployeeId employeeId,
+        SessionId except,
+        SessionRevocationReason reason,
+        DateTimeOffset revokedAtUtc,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Revokes every unrevoked session belonging to an Employee.
     /// </summary>
     /// <remarks>

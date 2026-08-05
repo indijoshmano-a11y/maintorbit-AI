@@ -1,10 +1,8 @@
 using MaintOrbit.Application.Abstractions.Security;
-using MaintOrbit.Application.Common.Configuration;
 using MaintOrbit.Domain.Common.Results;
 using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 using MaintOrbit.Shared.MultiTenancy;
-using Microsoft.Extensions.Options;
 
 namespace MaintOrbit.Infrastructure.Authentication;
 
@@ -15,10 +13,16 @@ namespace MaintOrbit.Infrastructure.Authentication;
 /// Runs inside the tenant scope the caller has already opened from the token's Company claim, so
 /// row-level security applies: a session belonging to another Company is invisible here and is
 /// refused as though it did not exist.
+/// <para>
+/// <b>The idle window is the Company's</b> (FR-AUTH-007), not the deployment's. It has to be the
+/// same one the device list applies and the same one recording activity resets — three readers of
+/// one window, and any disagreement means a session shown as live is refused, or one shown as gone
+/// still works.
+/// </para>
 /// </remarks>
 internal sealed class SessionValidator(
     ISessionRepository sessions,
-    IOptions<SessionOptions> options,
+    IAuthenticationPolicyProvider policies,
     TimeProvider timeProvider)
     : ISessionValidator
 {
@@ -58,7 +62,11 @@ internal sealed class SessionValidator(
             return Rejected();
         }
 
-        var idleTimeout = TimeSpan.FromMinutes(options.Value.IdleTimeoutMinutes);
+        // Read after the session is confirmed to belong to this Company, so the policy consulted
+        // is that Company's and the lookup runs under a tenant scope that already matched.
+        var policy = await policies.GetAsync(companyId, cancellationToken).ConfigureAwait(false);
+
+        var idleTimeout = TimeSpan.FromMinutes(policy.IdleTimeoutMinutes);
 
         // Covers all three stored conditions at once: revoked, past the absolute lifetime, and
         // beyond the idle window.

@@ -17,6 +17,38 @@ internal sealed class SessionRepository(MaintOrbitDbContext context) : ISessionR
     public void Add(Session session) => context.Sessions.Add(session);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<Session>> ListUnrevokedForEmployeeAsync(
+        EmployeeId employeeId, CancellationToken cancellationToken) =>
+        // AsNoTracking: a device list changes nothing. Ordered newest first because that is the
+        // order the list is read in — the device somebody just signed in on is the one they are
+        // looking for.
+        await context.Sessions
+            .AsNoTracking()
+            .Where(session => session.EmployeeId == employeeId && session.RevokedAtUtc == null)
+            .OrderByDescending(session => session.CreatedAtUtc)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <inheritdoc />
+    public Task<int> RevokeAllForEmployeeExceptAsync(
+        EmployeeId employeeId,
+        SessionId except,
+        SessionRevocationReason reason,
+        DateTimeOffset revokedAtUtc,
+        CancellationToken cancellationToken) =>
+        context.Sessions
+            .Where(session =>
+                session.EmployeeId == employeeId &&
+                session.RevokedAtUtc == null &&
+                session.Id != except)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(session => session.RevokedAtUtc, revokedAtUtc)
+                    .SetProperty(session => session.RevocationReason, reason)
+                    .SetProperty(session => session.UpdatedAtUtc, revokedAtUtc),
+                cancellationToken);
+
+    /// <inheritdoc />
     public Task<int> RevokeAllForEmployeeAsync(
         EmployeeId employeeId,
         SessionRevocationReason reason,
