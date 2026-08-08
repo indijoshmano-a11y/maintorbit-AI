@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Document | Audit and Compliance |
-| Version | 1.0 |
+| Version | 1.1 — implementation status recorded (Milestone 12.1) |
 | Status | Draft — SD-018 requires legal confirmation |
 | Owner | Security, Compliance & Engineering |
-| Last updated | 2026-07-30 |
+| Last updated | 2026-08-08 |
 | Audience | Security, Compliance, Legal, Engineering, Leadership |
 | Phase | 5 — Security Architecture |
 
@@ -101,6 +101,32 @@ developer discipline and FR-AUD-001 would not hold. Audit sits at pipeline posit
 **The Gateway hot path bypasses the pipeline** ([ADR-0010](../03-adr/ADR-0010-gateway-hot-path.md))
 and therefore implements audit emission directly. A shared test suite must assert that both
 paths produce equivalent audit outcomes, or they will drift (ADR-0010 R-3).
+
+> ### Implementation status as of Phase 11 — this section describes the target, not the build
+>
+> The design above is unchanged and remains the frozen decision. What exists today is less than it,
+> and the gap is recorded here so nobody reads this section as a description of the running system.
+>
+> | Element | Status |
+> | --- | --- |
+> | The ADR-0012 pipeline, and audit at **position 8** | **Not built.** No dispatcher exists; handlers are invoked directly from endpoints |
+> | Stream → batch writer → **append-only store** | **Not built.** The `auditing` module and `audit_events` do not exist. `LoggingAuditSink` writes to the log and is named as a placeholder |
+> | Reconciliation job | **Not built** |
+> | Emission itself | **Built.** `identity` emits sign-in, sign-out, lockout, MFA enrolment and challenge, role assignment, session revocation, and every authorization denial, through an `IAuditTrail` seam that fills actor, Company, correlation, and time |
+>
+> **Because the pipeline does not exist, `identity` emits directly — the same shape this section
+> already sanctions for the Gateway hot path.** That inherits the warning two paragraphs up:
+> coverage becomes a function of developer discipline. `AuditEmissionTests` is the deliberate
+> substitute, asserting through real HTTP that each documented event is emitted with the right
+> action, outcome, actor, and target. It is the coverage guarantee until position 8 exists.
+>
+> **Five guarantees in §3.2 are consequently unmet**, all for the same reason — there is no store:
+> **AU-1** (append-only — vacuously true today, since there is no relation to modify, but not
+> *enforced*), **AU-5** (searchable), **AU-6** (exportable), **AU-7** (retention), and **AU-9**
+> (searchable within 30 seconds). Legal holds have no home either. **AU-2, AU-3, AU-4 and AU-8 are
+> met** by the emission side as built. ADR-0011's immutability guarantee is a commitment the schema
+> has not yet been asked to keep. See
+> [I-1 and I-3](../08-development/identity-foundation-deferred-work.md).
 
 ### 3.4 What is audited
 

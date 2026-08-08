@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Document | Tenant Security |
-| Version | 1.0 |
+| Version | 1.1 — cross-Company path 13 added (Milestone 12.1) |
 | Status | Draft — **depends on unratified ADR-0005 (decision D-1)** |
 | Owner | Engineering & Security |
-| Last updated | 2026-07-30 |
+| Last updated | 2026-08-08 |
 | Audience | Engineering, Security, Compliance |
 | Phase | 5 — Security Architecture |
 
@@ -121,6 +121,17 @@ This table is the operative content of this document.
 | **10** | **Error messages and telemetry** | Another tenant's identifiers leaked in a message | Errors carry no cross-tenant identifiers; per-Company metrics do not expose others (NFR-OBS-010) |
 | **11** | **Gateway hot-path cache** | A cached entry served to the wrong tenant | Cache keys include the Company; entries resolved from the credential, not from request input |
 | **12** | **Data exports** | An export containing another Company's rows | Generated through the same tenant-scoped path; row-level security applies to the generating query |
+| **13** | **Authentication itself** | The Company is not yet known — it is the *result* of the lookup, not an input to it | **The one unavoidable elevated read.** Confined to `ICredentialDirectory`, whose four lookups (email, refresh token, password-reset token, email-verification token) are the complete enumeration. Each returns the Company alongside the identity, and every path downstream is tenant-scoped from that point |
+
+**Path 13 was missing from this table until Milestone 12.1**, and its absence is worth recording
+rather than quietly fixing. Authentication is a cross-Company read by necessity: an Employee
+presents an email address, and the tenant cannot be derived from the credential until the
+credential has been found. TC-1 forbids taking the Company from request input, so the alternative —
+a Company selector on the sign-in form — is the thing TC-1 exists to prevent.
+
+This is the concrete instance of the "elevated role, enumerated paths" control (path 5, AZ-h). The
+enumeration is not aspirational: it is one interface with four methods, and widening it is a change
+a reviewer can see. **A fifth lookup added here is a security review, not a refactor.**
 
 **Path 1 is the most dangerous and the least obvious.** It is not an application defect —
 it is an interaction between a correct application and a correctly-configured pooler. It

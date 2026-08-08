@@ -1,6 +1,6 @@
 # CLAUDE.md — Engineering Handbook
 
-**This is a routing document, not a summary.** ~29,500 lines of specification exist across 84
+**This is a routing document, not a summary.** ~29,900 lines of specification exist across 85
 documents in `docs/`. This file says which one answers your question and which rules must never
 be broken. It does not restate their content — a summary that drifts from its source is worse
 than no summary.
@@ -112,6 +112,7 @@ do not restate them, read them.
 | Money as `decimal` / string-encoded JSON, never floating point | `06-database` §1.2, `07-api` §1.6 |
 | **Trunk-based development; squash merge; Conventional Commits** | `08-development/git-workflow.md` |
 | Architecture tests AT-1…AT-12 are build gates | `02-architecture/backend-architecture-overview.md` §8 |
+| **Documentation drift is a build gate too** — a table without a definition, or a package outside the inventory, fails the build | `08-development/identity-foundation-deferred-work.md` §2 |
 
 ---
 
@@ -244,7 +245,7 @@ specification updated if the surface changed.
 | `docs/05-security/` | Security architecture, threat model, compliance, checklist |
 | `docs/06-database/` | Logical database design |
 | `docs/07-api/` | REST and Gateway API specification |
-| `docs/08-development/` | Coding standards, git workflow, testing, definition of done |
+| `docs/08-development/` | Coding standards, git workflow, testing, definition of done, **identity deferred-work register** |
 | `README.md` | Repository structure and setup |
 
 **Empty directories** (`03-database`, `04-api`, `05-development`, `06-deployment`, `07-adr`,

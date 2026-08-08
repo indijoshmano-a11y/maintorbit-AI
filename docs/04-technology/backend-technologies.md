@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Document | Backend Technologies |
-| Version | 1.0 |
+| Version | 1.1 — reconciled against the referenced packages (Milestone 12.1) |
 | Status | Draft — versions require verification |
 | Owner | Engineering |
-| Last updated | 2026-07-30 |
+| Last updated | 2026-08-08 |
 | Audience | Backend Engineering, Security, Architecture Review |
 | Phase | 4 — Technology Standards |
 
@@ -91,6 +91,26 @@ added ([`dependency-policy.md`](dependency-policy.md)).
 | `Microsoft.AspNetCore.Authentication.OpenIdConnect` | OAuth2 / OIDC | Runtime major | MIT | 🟢 | Google, Microsoft |
 | `Microsoft.AspNetCore.DataProtection` | Key management for framework-protected payloads | Runtime major | MIT | 🟡 | **Distinct from ADR-0008 credential encryption** — must not be confused |
 | `Microsoft.AspNetCore.HealthChecks` | Liveness and readiness | Runtime major | MIT | 🟢 | NFR-OBS-005; gates rolling deployment |
+| `Microsoft.IdentityModel.JsonWebTokens` | Token issuance and validation primitives | 8.x | MIT | 🟢 | The half of the token story `JwtBearer` does not cover: `identity` **issues** access tokens, and the middleware only validates them |
+
+**The `Microsoft.Extensions.*` abstraction packages.** The inner layers reference these directly
+rather than inheriting them through the shared framework:
+
+| Package | Carries | Referenced by |
+| --- | --- | --- |
+| `Microsoft.Extensions.DependencyInjection.Abstractions` | `IServiceCollection`, service lifetimes | Application, Infrastructure |
+| `Microsoft.Extensions.Logging.Abstractions` | `ILogger<T>` | Application, Infrastructure |
+| `Microsoft.Extensions.Configuration.Abstractions` | `IConfiguration` | Infrastructure |
+| `Microsoft.Extensions.Options` | `IOptions<T>`, `IValidateOptions<T>` | Application, Infrastructure |
+| `Microsoft.Extensions.Options.ConfigurationExtensions` | Binding options to configuration sections | Infrastructure |
+| `Microsoft.Extensions.Options.DataAnnotations` | `ValidateDataAnnotations()` | Infrastructure |
+
+This is what lets Application and Domain state a dependency on `ILogger<T>` or `IOptions<T>`
+without referencing ASP.NET Core — the abstraction packages carry the contracts and none of the
+hosting. It is the mechanism behind ADR-0001's dependency rule and the architecture test that
+enforces it (AT-1): **Domain declares no package at all, and Application declares only
+abstractions.** Listing them here is not bookkeeping — a hosting package appearing in that list
+instead would be a boundary violation.
 
 **Note on `DataProtection`.** It protects framework payloads such as antiforgery tokens.
 It is **not** the mechanism protecting Provider Credentials — that is envelope encryption
@@ -205,16 +225,46 @@ no mediator appears in this inventory.
 
 | Package | Purpose | Version | Licence | Risk | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `Microsoft.AspNetCore.Cryptography.KeyDerivation` | Password hashing | Runtime major | MIT | 🟢 | Memory-hard algorithm required; parameters are a security decision |
-| `Otp.NET` | TOTP multi-factor | 1.x | MIT | 🟡 | Small library; **evaluate maintenance health** — §12 |
+| `Konscious.Security.Cryptography.Argon2` | Password hashing — **Argon2id** | 1.3.1 | MIT | 🟡 | Parameters are a security decision, validated at startup. Small library; **evaluate maintenance health** — §12. `employee_credentials` records `algorithm` and `password_version` per row, so replacing it is a data migration rather than a rewrite |
+| *(none — framework `HMACSHA1`)* | TOTP multi-factor | — | — | 🟢 | RFC 6238 is ~40 lines over a framework primitive. See the note below |
 | `Azure.Security.KeyVault.Keys` | Key custodian — hosted deployment | 4.x | MIT | 🟡 | **Behind a port.** Portable custodian is the CI default (AU-010) |
 | `Azure.Identity` | Azure authentication | 1.x | MIT | 🟡 | Hosted deployment only |
 | `System.Security.Cryptography` *(framework)* | Envelope encryption primitives | Runtime | MIT | 🟢 | Framework, not a package |
+
+**No package for TOTP.** `Otp.NET` was listed here through Phase 10 and was not adopted. RFC 6238
+is a counter, an HMAC, and a truncation — roughly forty lines over `HMACSHA1`, which the framework
+already provides — and the implementation needs one thing no general-purpose library offers: the
+time step must be *returned* so the enrolment row can record the last one spent and refuse a
+replay. Taking a dependency to avoid forty lines, then working around it for the security property
+that matters, is the worse trade. `Rfc6238TotpService` carries the RFC's test vectors.
+
+> **`HMACSHA1` here is not a contradiction of §9's SHA-1 prohibition.** That prohibition is about
+> collision resistance, which HMAC does not rely on. RFC 6238 fixes SHA-1 as the default and every
+> authenticator application implements it; a different digest would produce codes no Employee's
+> app can generate, and an unusable second factor is one nobody enables.
 
 **Credential material must not be a plain string type.** NFR-SEC-005 forbids credentials
 appearing in logs, traces, or error output, and the reliable way to achieve that is
 construction — a type that cannot be interpolated into a log message — rather than
 scrubbing after the fact.
+
+### Implementation status of this inventory
+
+This document is the **approved** set, not the referenced set. Most of it belongs to modules Phase
+12 and later will build. As of Phase 11 the backend references **20 packages**; the authoritative
+list is [`backend/Directory.Packages.props`](../../backend/Directory.Packages.props), which central
+package management makes the single place a version is declared.
+
+Two entries below record a decision that has since been taken the other way, and are corrected in
+place rather than left to be discovered:
+
+| Entry | Documented | As built | Why |
+| --- | --- | --- | --- |
+| `Serilog.AspNetCore` / `Serilog.Sinks.Console` (§9) | Structured logging | **Not referenced.** `Microsoft.Extensions.Logging` with the framework JSON console formatter | Nothing in Phase 10–11 needed a sink Serilog provides and the framework does not. Reconsider when the first non-console sink is required — the abstraction is already `ILogger<T>`, so it is a registration change |
+| `NetArchTest.Rules` *or* `ArchUnitNET` (§11) | Architecture tests | **Not referenced.** 42 rules implemented over reflection and source inspection | §12 anticipated this: "rules are simple enough to reimplement over reflection APIs; the *rules* are the asset, not the library". The current `NetArchTest.Rules` release targets netstandard2.0 with a 2020-era Mono.Cecil, and neither library expresses the source-text and project-manifest rules |
+
+A drift check enforces the direction that matters: every package the build references must appear
+in this document. It does **not** require the reverse, because a planned package is not drift.
 
 ---
 

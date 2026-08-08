@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Document | Logical Database Design |
-| Version | 1.0 |
+| Version | 1.1 — reconciled against the built schema (Milestone 12.1) |
 | Status | Draft — **blocked on four decisions; see §10.3** |
 | Owner | Engineering |
-| Last updated | 2026-07-30 |
+| Last updated | 2026-08-08 |
 | Audience | Engineering, Security, Architecture Review |
 | Phase | 6 — Database Design |
 
@@ -356,13 +356,21 @@ identifier without a constraint.
 | Reference | Enforced by FK? | Why |
 | --- | --- | --- |
 | `teams.company_id` → `companies.id` | ✅ Same schema (`tenancy`) | |
-| `employees.company_id` → `companies.id` | ✅ Same schema | |
+| `employees.company_id` | ❌ **Identifier only** | Crosses `identity` → `tenancy` |
 | `sessions.employee_id` → `employees.id` | ✅ Same schema (`identity`) | |
 | `messages.conversation_id` → `conversations.id` | ✅ Same schema (`chat`) | |
 | `usage_records.company_id` | ❌ **Identifier only** | Crosses `usage` → `tenancy` |
 | `usage_records.employee_id` | ❌ **Identifier only** | Crosses `usage` → `identity` |
 | `conversations.employee_id` | ❌ **Identifier only** | Crosses `chat` → `identity` |
 | `provider_connections.company_id` | ❌ **Identifier only** | Crosses `providers` → `tenancy` |
+
+> **Corrected in Milestone 12.1.** `employees.company_id` was previously listed as "✅ Same
+> schema". It is not: `employees` belongs to `identity` and `companies` to `tenancy`, so the
+> reference crosses a module boundary and the rule at the top of this section forbids a constraint
+> on it. The implementation has always been correct — no such foreign key exists in any migration —
+> and the table is what was wrong. Every tenant-scoped `identity` table carries `company_id` as a
+> bare column for exactly this reason, which is also what makes the row-level security policy a
+> local comparison rather than a per-row join into another schema.
 
 **Why this constraint exists.** ADR-0002 rule R-6 states that a module owns its schema and no
 other module holds a foreign key into it. That rule is what makes module extraction a
@@ -465,7 +473,8 @@ hashed, single-use, time-limited.
 | Aspect | Detail |
 | --- | --- |
 | **Purpose** | A user account belonging to exactly one Company |
-| **Key columns** | `company_id`, `email`, `email_verified_at_utc`, `status` (invited, active, suspended, removed), `primary_team_id`, `deleted_at_utc`, `pseudonymized_at_utc` |
+| **Key columns** | `company_id` (identifier only — see §3.3), `email`, `email_verified_at_utc`, `status` (`Invited`, `Active`, `Suspended`, `Removed`), `primary_team_id`, `deleted_at_utc`, `pseudonymized_at_utc` |
+| **Constraints** | `ck_employees_status` restricts `status` to the four values above, spelled exactly as shown |
 | **Indexes** | `ux_employees_company_id_email` **partial**, excluding deleted; `ix_employees_company_id_status` |
 | **Soft delete** | Yes — records retained, attributed to the removed identity (FR-TEN-008) |
 | **Erasure** | `pseudonymized_at_utc` supports SD-018 — identity is cleared, the row persists |
@@ -479,19 +488,78 @@ position changes, this column and the erasure path change with it. See §10.3.
 
 | Aspect | Detail |
 | --- | --- |
-| **Key columns** | `employee_id`, `password_hash` (Argon2id), `hash_parameters`, `password_changed_at_utc` |
+| **Key columns** | `company_id`, `employee_id`, `password_hash` (Argon2id), `algorithm`, `password_version`, `hash_parameters`, `password_changed_at_utc`, `require_password_change`, `failed_login_count`, `lockout_until_utc` |
+| **Indexes** | `ux_employee_credentials_employee_id` — the 1:0..1 relationship is enforced by the index, not by convention |
+| **Constraints** | `ck_employee_credentials_algorithm` restricts `algorithm` to `Argon2id`; `ck_employee_credentials_failed_login_count` keeps the counter non-negative; `ck_employee_credentials_password_version` keeps the version positive |
 | **Classification** | **C4 — never logged, never in error messages, never leaves production** |
-| **Note** | `hash_parameters` is stored per row so that a parameter change (annual review, SD-010) does not invalidate existing hashes |
+| **Note** | `hash_parameters` is stored per row so that a parameter change (annual review, SD-010) does not invalidate existing hashes. `algorithm` and `password_version` make an algorithm migration a data change: a row records what produced it, so old and new hashes coexist |
 
-### `federated_identities` — C2
+**`failed_login_count` and `lockout_until_utc` live here, not on `employees`.** They describe the
+credential being attacked, not the person — an Employee who also authenticates federated should
+not be locked out of that path because somebody guessed at their password.
 
-`employee_id`, `provider` (google, microsoft, saml), `subject_identifier`, `linked_at_utc`.
-Unique on `(provider, subject_identifier)`.
+### `mfa_enrollments` — **C4**
 
-### `mfa_enrollments` — **C4** · `mfa_recovery_codes` — **C4**
+| Aspect | Detail |
+| --- | --- |
+| **Purpose** | One TOTP factor per Employee (FR-AUTH-005) |
+| **Key columns** | `company_id`, `employee_id`, `method`, `secret_ciphertext`, `secret_iv`, `secret_auth_tag`, `dek_version`, `algorithm_id`, `status` (`Pending`, `Confirmed`, `Disabled`), `last_accepted_time_step`, `confirmed_at_utc`, `last_verified_at_utc`, `disabled_at_utc` |
+| **Indexes** | `ux_mfa_enrollments_employee_id_active` **partial** where `disabled_at_utc IS NULL` — one live factor per Employee, enforced by the database |
+| **Constraints** | `ck_mfa_enrollments_status`; `ck_mfa_enrollments_confirmation` ties `confirmed_at_utc` to the confirmed state |
+| **Design significance** | **`last_accepted_time_step` is the replay gate.** A TOTP code is valid for its whole 30-second step, so without a record of the last step spent, a code observed in transit can be presented again inside its own window. It is committed even when the surrounding operation fails, so replay cannot be bought by failing the first attempt |
 
-TOTP secret stored **encrypted under the Company DEK** using the same envelope scheme as
-Provider Credentials (§4.3). Recovery codes are hashed and single-use.
+The secret is stored **encrypted under the Company DEK** using the same envelope scheme as
+Provider Credentials (§4.3) — `secret_ciphertext` / `secret_iv` / `secret_auth_tag` / `dek_version`
+are that envelope inline, and `algorithm_id` records which scheme produced it (SD-009, SD-012).
+
+### `mfa_recovery_codes` — **C4**
+
+| Aspect | Detail |
+| --- | --- |
+| **Key columns** | `company_id`, `employee_id`, `enrollment_id`, `code_hash` (SHA-256), `issued_at_utc`, `used_at_utc` |
+| **Indexes** | `ux_mfa_recovery_codes_enrollment_id_code_hash` |
+| **Design significance** | Codes are **scoped to the enrolment**, not the Employee, so a set issued for a factor that was later disabled and replaced cannot satisfy the new one. `used_at_utc` makes them single-use |
+
+Hashed with SHA-256 rather than Argon2id: a recovery code is high-entropy platform-generated
+material, which §9's decision tree (09-encryption-strategy §3) routes away from a memory-hard
+function.
+
+### `password_reset_tokens` — **C4**
+
+| Aspect | Detail |
+| --- | --- |
+| **Purpose** | Single-use, time-limited proof of mailbox control for password reset (FR-AUTH-012) |
+| **Key columns** | `company_id`, `employee_id`, `token_hash` (SHA-256), `requested_at_utc`, `requested_from_ip_address`, `expires_at_utc`, `consumed_at_utc`, `invalidated_at_utc` |
+| **Indexes** | `ux_password_reset_tokens_token_hash` — the lookup path; `ix_password_reset_tokens_employee_id_outstanding` **partial** where neither consumed nor invalidated |
+| **Constraints** | `ck_password_reset_tokens_expiry` — a token must expire after it is issued |
+| **Design significance** | **`consumed_at_utc` and `invalidated_at_utc` are separate columns, and consumed rows are never deleted.** A deleted row makes a replayed link indistinguishable from a typo; keeping both timestamps distinguishes a link somebody *used* from one a newer request superseded |
+
+The token itself is never stored — only its SHA-256. Issuing a new request invalidates the
+outstanding ones, so an Employee cannot accumulate live reset links in a mailbox.
+
+### `email_verification_tokens` — **C4**
+
+| Aspect | Detail |
+| --- | --- |
+| **Purpose** | Single-use, time-limited proof of address control; verification gates activation (FR-AUTH-013) |
+| **Key columns** | `company_id`, `employee_id`, **`email`**, `token_hash` (SHA-256), `issued_at_utc`, `expires_at_utc`, `consumed_at_utc`, `invalidated_at_utc` |
+| **Indexes** | `ux_email_verification_tokens_token_hash`; `ix_email_verification_tokens_employee_id_outstanding` **partial** where neither consumed nor invalidated |
+| **Constraints** | `ck_email_verification_tokens_expiry` |
+| **Design significance** | **The `email` column is what makes this a verification rather than a formality.** The token records the address it was issued *for*, and redemption compares against the Employee's current address — so a link sent to an old address cannot verify whatever replaced it |
+
+### `company_authentication_policies` — C2
+
+| Aspect | Detail |
+| --- | --- |
+| **Purpose** | Per-Company authentication policy (FR-AUTH-007) |
+| **Primary key** | **`company_id`** — the policy *is* the Company's, so there is no surrogate key and no way to hold two |
+| **Key columns** | `minimum_password_length`, `require_breach_check`, `idle_timeout_minutes`, `absolute_lifetime_minutes`, `mfa_required`, `maximum_failed_attempts`, `lockout_minutes`, `updated_by_employee_id` |
+| **Constraints** | Bounds on every numeric setting, plus **`ck_company_authentication_policies_lifetime_order`** — the idle timeout must be shorter than the absolute lifetime |
+| **Design significance** | The lifetime-order constraint is the one worth naming. An idle window at or beyond the absolute lifetime can never fire, so the control would exist in configuration and do nothing — the kind of setting assumed to be working precisely because nobody sees it fail |
+
+**This table lives in `identity`, not `tenancy`.** It is authentication policy, owned by the module
+that enforces it; putting it in `tenancy.company_settings` would mean `identity` reading another
+module's store on every session validation.
 
 ### `sessions` — C2
 
@@ -500,6 +568,7 @@ Provider Credentials (§4.3). Recovery codes are hashed and single-use.
 | **Purpose** | A **device-scoped** authenticated session (SD-016) |
 | **Key columns** | `employee_id`, `company_id`, `device_label`, `client_type`, `ip_address`, `coarse_location`, `created_at_utc`, `last_active_at_utc`, `absolute_expires_at_utc`, `revoked_at_utc`, `revocation_reason` |
 | **Indexes** | `ix_sessions_employee_id_active` **partial** where `revoked_at_utc IS NULL`; `ix_sessions_company_id` |
+| **Constraints** | `ck_sessions_client_type` (`Unknown`, `WebConsole`, `VsCodeExtension`, `ServerApplication`); `ck_sessions_absolute_expiry`; `ck_sessions_revocation` pairs `revoked_at_utc` with `revocation_reason` |
 | **Classification** | **C2 — but `ip_address` and `coarse_location` are personal data** about employees, bounded retention, **visible to the Employee** (principle P-7) |
 
 **Three expiry timers** (§14 of the security architecture) are represented as
@@ -510,15 +579,15 @@ Access token expiry is not stored — it is carried in the token.
 
 | Aspect | Detail |
 | --- | --- |
-| **Key columns** | `session_id`, `family_id`, `token_hash`, `issued_at_utc`, `used_at_utc`, `superseded_by_id`, `revoked_at_utc` |
-| **Indexes** | `ux_refresh_tokens_token_hash`; `ix_refresh_tokens_family_id` |
+| **Key columns** | `company_id`, `session_id`, `family_id`, `token_hash`, `issued_at_utc`, `expires_at_utc`, `used_at_utc`, `superseded_by_id`, `revoked_at_utc` |
+| **Indexes** | `ux_refresh_tokens_token_hash`; `ix_refresh_tokens_family_id`; `ix_refresh_tokens_session_id` |
 | **Design significance** | **`family_id` and `used_at_utc` implement reuse detection (SD-014).** Presenting a token whose `used_at_utc` is already set revokes the entire family |
 
 **Retention matters here.** Used tokens cannot be deleted immediately — reuse detection
 depends on recognizing an already-consumed token. They are retained for the session's absolute
 lifetime plus a margin, then purged.
 
-### `platform_api_keys` — **C4**
+### `platform_api_keys` — **C4** · *not yet built (see "Designed, not yet built" below)*
 
 | Aspect | Detail |
 | --- | --- |
@@ -530,14 +599,62 @@ lifetime plus a margin, then purged.
 database write to the Gateway hot path, violating ADR-0010. It is derived from Usage Records
 or updated at coarse granularity.
 
-### `permissions` · `role_definitions` · `role_permissions` · `employee_roles` — C2
+### `permissions` · `role_definitions` · `role_permissions` — C1 🌐 *(reference data)*
+
+| Table | Columns | Primary key |
+| --- | --- | --- |
+| `permissions` | `code`, `description` | `code` |
+| `role_definitions` | `code`, `name`, `is_built_in` | `code` |
+| `role_permissions` | `role_code`, `permission_code` | `(role_code, permission_code)` |
+
+**These three carry no `company_id` and no row-level security policy**, and that is deliberate
+rather than an omission. They are the deployment-wide catalogue: the set of permissions the
+software understands and the presets composed from them are properties of the *build*, not of a
+tenant. A policy on them would have to admit every Company anyway, and §5.5 already carves out
+shared reference data. `employee_roles` — the table that says who holds what — **is** tenant-scoped
+and does carry a policy.
+
+Text codes rather than UUIDs, per §1.6: these are referenced by name in configuration and read by
+humans in an audit trail.
+
+`role_permissions` → `permissions` is `ON DELETE RESTRICT`; `role_permissions` → `role_definitions`
+is `ON DELETE CASCADE`. Retiring a permission that a role still grants must fail loudly, because
+the silent alternative is a role that quietly stops granting something.
+
+### `employee_roles` — C2
+
+| Aspect | Detail |
+| --- | --- |
+| **Purpose** | Which roles an Employee holds, and over what (FR-PERM-003) |
+| **Key columns** | `company_id`, `employee_id`, `role_code`, `scope_type` (`Company`, `Team`, `Self`), `scope_id`, `created_by_employee_id` |
+| **Indexes** | `ux_employee_roles_employee_id_role_code_scope` on `(employee_id, role_code, scope_type, scope_id)` **`NULLS NOT DISTINCT`**; plus `ix_` on `company_id`, `employee_id`, `role_code` |
+| **Constraints** | `ck_employee_roles_scope_type`; `ck_employee_roles_scope_target` ties `scope_id` to the scope types that require one |
+| **Foreign keys** | `employee_id` → `employees.id` `ON DELETE CASCADE`; `role_code` → `role_definitions.code` `ON DELETE RESTRICT` |
+
+**`NULLS NOT DISTINCT` is load-bearing and was a defect once.** A Company-scoped assignment has a
+`NULL` `scope_id`, and PostgreSQL's default treats each `NULL` as distinct — so the uniqueness
+index silently permitted unlimited duplicate Company-scoped grants while correctly preventing
+Team-scoped ones. Requires PostgreSQL 15 or later (§1.3, TD-5).
 
 **Roles are permission presets, not code branches** (SD-020). `permissions` is the atomic
 catalogue (`provider-connection.create`, `budget.manage`, `audit.read`).
 `role_definitions` holds the seven fixed roles now and customer-composed roles at v2.0
-(FR-PERM-006). `employee_roles` carries `scope_type` (company, team, self) and `scope_id`.
+(FR-PERM-006).
 
 **This structure is what makes custom roles a data change rather than a rewrite.**
+
+### Designed, not yet built
+
+These belong to `identity` and are specified above, but **no migration creates them** as of
+Phase 11. They are listed here so the gap is explicit rather than inferred from their absence.
+
+| Table | Blocked on | Register entry |
+| --- | --- | --- |
+| `federated_identities` | OAuth2 / SSO, not in Phase 11 scope | [I-6](../08-development/identity-foundation-deferred-work.md) |
+| `platform_api_keys` | Platform API Keys, not in Phase 11 scope | [I-5](../08-development/identity-foundation-deferred-work.md) |
+
+`federated_identities` as specified: `employee_id`, `provider` (google, microsoft, saml),
+`subject_identifier`, `linked_at_utc`, unique on `(provider, subject_identifier)`.
 
 ## 4.3 `providers`
 

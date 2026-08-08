@@ -1,6 +1,8 @@
 # Identity Foundation — Deferred Work Register
 
 **Status:** Phase 11 complete (milestones 11.1–11.24), verified 2026-08-08.
+**Documentation reconciled:** Milestone 12.1 — §2's defects are resolved; §5 classifies every
+Phase 11 assumption.
 **Scope:** the `identity` module only. Nothing here describes work that was attempted and failed;
 everything is work deliberately not started, or a documentation defect found while building.
 
@@ -17,7 +19,7 @@ article.
 
 | # | Deferred | What stands in its place | Consequence if forgotten |
 | --- | --- | --- | --- |
-| **I-1** | The **`auditing` module** — `audit_events` table, RLS policy, append-only enforcement (AU-1), retention (AU-7), legal hold (AU-9) | `LoggingAuditSink` writes events to the log. It is named as a placeholder, not a store | **Highest-consequence item here.** Audit events are emitted correctly and go nowhere durable. ADR-0011's immutability guarantee is currently unmet — there is no append-only relation to enforce it on |
+| **I-1** | The **`auditing` module** — `audit_events` table, RLS policy, append-only enforcement (AU-1), search and export (AU-5, AU-6, AU-9), retention (AU-7), legal holds | `LoggingAuditSink` writes events to the log. It is named as a placeholder, not a store | **Highest-consequence item here.** Audit events are emitted correctly and go nowhere durable. ADR-0011's immutability guarantee is currently unmet — there is no append-only relation to enforce it on |
 | **I-2** | **Email delivery** for password reset and email verification | `UndeliveredPasswordResetNotifier` / `UndeliveredEmailVerificationNotifier` log the gap rather than sending | Both flows are complete and correct server-side but cannot reach an Employee. Verification gates account activation (FR-AUTH-013), so this blocks real onboarding |
 | **I-3** | The **ADR-0012 CQRS dispatcher** and its nine ordered behaviours | Handlers are registered one per use case against `ICommandHandler`/`IQueryHandler` and invoked directly from endpoints | Audit emission, validation, and transaction boundaries are each implemented per-handler. §3.3 warns this makes coverage "a function of developer discipline" — `AuditEmissionTests` is the deliberate stand-in for the pipeline's guarantee (see D-4 below) |
 | **I-4** | The **ADR-0013 transactional outbox** | Handlers call `SaveChangesAsync` directly; audit emission is fail-open per ADR-0021 | An audit event can be lost if the sink fails after the transaction commits. This is classified fail-open deliberately, and every loss is logged as an AU-8 incident (EventId 1600) — but it is not the at-least-once delivery the outbox would give |
@@ -31,22 +33,36 @@ article.
 ## 2. Documentation defects found while building
 
 These are defects in `docs/`, not in the code. Each was worked around by following the frozen
-decision the document contradicts, and each was reported in the milestone that hit it. **None has
-been corrected**, because correcting specification documents was outside every milestone's scope.
+decision the document contradicts, and each was reported in the milestone that hit it. Correcting
+them was outside every Phase 11 milestone's scope; **Milestone 12.1 was that scope**, and the
+resolution column records what happened to each.
 
-| # | Document | Defect |
-| --- | --- | --- |
-| **D-1** | `06-database` §3.3 | `employees.company_id → companies.id` is marked "same schema". `companies` belongs to `tenancy`, so this is a cross-module foreign key — which §3.3 itself, and CLAUDE.md §9, forbid. Implemented without the FK |
-| **D-2** | `04-technology` §8 | Names a PBKDF2-only package for password hashing, contradicting SD-010's Argon2id. Implemented per SD-010 |
-| **D-3** | `05-security` §3.4 | The cross-Company access path table omits authentication, which is itself a cross-Company read — an Employee's email must be resolved before their tenant is known. Implemented as `ICredentialDirectory`, the one documented elevated path |
-| **D-4** | `05-security` §3.3 | Assigns audit emission to pipeline position 8 of a pipeline that does not exist (see I-3), and defines no vocabulary of audit action names. Action and target names were centralised in `AuditActions`/`AuditTargets` so a later reconciliation renames in one place |
-| **D-5** | `06-database` §4.2 | **Three tables have no definition at all**: `password_reset_tokens`, `email_verification_tokens`, `company_authentication_policies` |
-| **D-6** | `06-database` §4.2 | **Six tables are described in prose but carry no column definition**, unlike `sessions` which has one: `mfa_enrollments`, `mfa_recovery_codes`, `permissions`, `role_definitions`, `role_permissions`, `employee_roles` |
+| # | Document | Defect | Resolution |
+| --- | --- | --- | --- |
+| **D-1** | `06-database` §3.3 | `employees.company_id → companies.id` marked "same schema". `companies` belongs to `tenancy`, so this is a cross-module foreign key — which §3.3 itself, and CLAUDE.md §9, forbid. Implemented without the FK | ✅ **12.1** — row corrected to "identifier only", with a note recording that the code was always right |
+| **D-2** | `04-technology` §8 | Named `Microsoft.AspNetCore.Cryptography.KeyDerivation` (PBKDF2 only) for password hashing, contradicting SD-010's Argon2id. Implemented per SD-010 | ✅ **12.1** — replaced with `Konscious.Security.Cryptography.Argon2` 1.3.1 |
+| **D-3** | `05-security/04-tenant-security` §3.4 | The cross-Company access path table omits authentication, which is itself a cross-Company read — an Employee's email must be resolved before their tenant is known | ✅ **12.1** — added as **path 13**, naming `ICredentialDirectory`'s four lookups as the complete enumeration |
+| **D-4** | `05-security/12-audit-and-compliance` §3.3 | Assigns audit emission to pipeline position 8 of a pipeline that does not exist (see I-3), and defines no vocabulary of audit action names | ⚠️ **12.1, partial** — an implementation-status block now marks the whole design as target-not-build. **The action vocabulary remains undocumented** (see §6) |
+| **D-5** | `06-database` §4.2 | **Three tables had no definition at all**: `password_reset_tokens`, `email_verification_tokens`, `company_authentication_policies` | ✅ **12.1** — all three defined from the verified schema |
+| **D-6** | `06-database` §4.2 | **Six tables described in prose with no column definition**: `mfa_enrollments`, `mfa_recovery_codes`, `permissions`, `role_definitions`, `role_permissions`, `employee_roles` | ✅ **12.1** — all six given definitions; the three reference tables gained an explanation of why they carry no RLS |
 
-> **Recommendation, restated from milestones 11.17, 11.19, 11.20, 11.21 and 11.22.** These are now
-> six defects spanning nine undocumented tables. A reconciliation milestone should precede the next
-> feature. The specification is the artifact implementation is checked against; at this size it has
-> started checking the other way.
+Also corrected in 12.1, found during the same audit rather than during Phase 11:
+
+| # | Document | Defect | Resolution |
+| --- | --- | --- | --- |
+| **D-7** | `06-database` §4.2 | `employee_credentials` key columns omitted `company_id`, `algorithm`, `password_version`, `require_password_change`, `failed_login_count`, `lockout_until_utc` | ✅ Completed from the verified schema |
+| **D-8** | `06-database` §4.2 | `employees.status` documented lowercase (`invited, active…`); the check constraint requires `Invited`, `Active`, `Suspended`, `Removed` | ✅ Corrected, and the constraint named |
+| **D-9** | `06-database` §4.2 | `refresh_tokens` omitted `company_id` and `expires_at_utc`; `sessions` listed no constraints | ✅ Completed |
+| **D-10** | `06-database` §4.2 | `federated_identities` and `platform_api_keys` documented as though they exist; no migration creates either | ✅ Moved under "Designed, not yet built", cross-referenced to I-5 and I-6 |
+| **D-11** | `04-technology` §8 | `Otp.NET` named for TOTP; no such package is referenced — RFC 6238 is implemented over the framework's `HMACSHA1` | ✅ Corrected, with the reasoning and the SHA-1 clarification |
+| **D-12** | `04-technology` §4 | Seven referenced packages absent from the inventory, including `Microsoft.IdentityModel.JsonWebTokens` and the six `Microsoft.Extensions.*` abstractions that make ADR-0001's dependency rule expressible | ✅ Added |
+
+> **Recurrence prevention.** `DocumentationDriftTests` now enforces the two directions that failed
+> silently: **every table created by a migration must appear in `06-database`**, and **every package
+> the build references must appear in `04-technology`**. Both are one-directional by design — a
+> documented-but-unbuilt table is a specification doing its job, not drift. A third rule asserts no
+> migration declares a foreign key into another schema, which is D-1's defect stated against the
+> migrations rather than against prose.
 
 ---
 
@@ -74,7 +90,65 @@ From CLAUDE.md §5. Listed because Phase 11 built on ground these decisions coul
 
 ---
 
-## 5. What was verified, and how
+## 5. Phase 11 assumptions, classified
+
+Every judgement Phase 11 made without an explicit instruction, classified in Milestone 12.1. The
+categories matter because they carry different obligations: a **documented decision** needs nothing,
+an **accepted implementation assumption** is now ratified and may be relied on, a **deferred
+decision** must not be built upon, a **documentation defect** was the document's error, and an
+**obsolete** entry records a plan that has been superseded.
+
+### Ratified as documented decisions
+
+The implementation already matched a decision recorded somewhere; 12.1 made the link explicit.
+
+| Assumption | Where it now rests |
+| --- | --- |
+| Recovery codes hashed with SHA-256, not Argon2id | `09-encryption-strategy` §3's decision tree routes high-entropy platform-generated material away from memory-hard functions |
+| `identity` emits audit events directly, with no pipeline | `12-audit-and-compliance` §3.3 already sanctioned direct emission for the Gateway hot path; the new status block extends it explicitly to Phase 11 |
+| Architecture rules implemented over reflection, not `NetArchTest` | `04-technology` §12 anticipated it — "the *rules* are the asset, not the library". Now recorded as taken, not merely permitted |
+| `ICredentialDirectory`'s four lookups as the only cross-Company reads | `04-tenant-security` §3.4 **path 13**, added in 12.1 |
+| `HMACSHA1` inside RFC 6238 despite the SHA-1 prohibition | `04-technology` §8 — the prohibition concerns collision resistance, which HMAC does not rely on |
+| No foreign key from `identity` into `tenancy` | ADR-0002 R-6; `06-database` §3.3, corrected in 12.1 |
+
+### Accepted implementation assumptions — now ratified
+
+These were judgement calls with no documented answer. 12.1 documents them; they may now be relied
+upon, and changing one is a decision rather than a refactor.
+
+| Assumption | Rationale, now recorded |
+| --- | --- |
+| `company_authentication_policies` lives in `identity`, not `tenancy.company_settings` | It is authentication policy, owned by the module that enforces it. The alternative reads another module's store on every session validation |
+| `failed_login_count` / `lockout_until_utc` on `employee_credentials`, not `employees` | They describe the credential under attack, not the person; a federated path should not be locked by password guessing |
+| `permissions`, `role_definitions`, `role_permissions` carry no `company_id` and no RLS | Deployment-wide reference data — a property of the build, not a tenant. `06-database` §5.5 already carves this out |
+| `NULLS NOT DISTINCT` on the `employee_roles` uniqueness index | Without it a `NULL` `scope_id` makes every Company-scoped grant distinct, so duplicates are permitted at exactly one scope. This was a live defect, fixed in 11.16 |
+| Employee status and enum-like values stored PascalCase | Matches the domain enum names; the check constraints are the authority. Previously documented lowercase — D-8 |
+| Framework logging rather than Serilog | Nothing needed a sink Serilog provides; `ILogger<T>` keeps it a registration change later |
+
+### Deferred decisions — do not build on these
+
+| Assumption | Why it is not settled |
+| --- | --- |
+| `LoggingAuditSink` is where audit events go | It is a placeholder. The destination is decided when the `auditing` module exists — **I-1** |
+| One deployment-wide data key serves every Company | `dek_version` is on every row and the envelope is per-row, so the key *source* is the only deferred part — **I-8** |
+| TOTP accepts only the current 30-second step, with no skew window | "Clock tolerance only if documented" was the instruction, and nothing documents a window. Widening it is a security decision, not a usability tweak |
+| Audit action and target names (`AuditActions`, `AuditTargets`) | Invented, because no vocabulary is documented. Centralised so a later reconciliation renames in one place — **D-4, still open** |
+
+### Documentation defects
+
+All twelve are in §2, with their resolutions.
+
+### Obsolete
+
+| Superseded | By |
+| --- | --- |
+| `Microsoft.AspNetCore.Cryptography.KeyDerivation` as the password hashing package | `Konscious.Security.Cryptography.Argon2`, per SD-010 |
+| `Otp.NET` as the TOTP package | No package; RFC 6238 over the framework's `HMACSHA1` |
+| The claim that no Phase 11 documentation defect had been corrected | Milestone 12.1 corrected all but one |
+
+---
+
+## 6. What was verified, and how
 
 Recorded so a later reader knows what "Phase 11 complete" was allowed to mean.
 
@@ -92,3 +166,6 @@ Recorded so a later reader knows what "Phase 11 complete" was allowed to mean.
 - **Architecture, dependencies, security** — 42 architecture rules pass as build gates, including
   the six added in 11.23.
 - **Tests** — 928 across three assemblies, all passing.
+
+Re-verified in Milestone 12.1 against the same procedure, plus a package vulnerability check
+(none) and the two new documentation-drift rules. Test count is now 933.
