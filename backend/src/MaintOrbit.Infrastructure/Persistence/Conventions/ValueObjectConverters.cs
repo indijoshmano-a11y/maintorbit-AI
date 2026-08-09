@@ -45,6 +45,11 @@ internal static class ValueObjectConverters
     internal sealed class SessionIdConverter()
         : ValueConverter<SessionId, Guid>(id => id.Value, value => new SessionId(value));
 
+    /// <summary>Maps <see cref="Domain.Modules.Auditing.ValueObjects.AuditEventId"/> to <c>uuid</c>.</summary>
+    internal sealed class AuditEventIdConverter()
+        : ValueConverter<Domain.Modules.Auditing.ValueObjects.AuditEventId, Guid>(
+            id => id.Value, value => new Domain.Modules.Auditing.ValueObjects.AuditEventId(value));
+
     /// <summary>Maps <see cref="RefreshTokenId"/> to <c>uuid</c>.</summary>
     internal sealed class RefreshTokenIdConverter()
         : ValueConverter<RefreshTokenId, Guid>(id => id.Value, value => new RefreshTokenId(value));

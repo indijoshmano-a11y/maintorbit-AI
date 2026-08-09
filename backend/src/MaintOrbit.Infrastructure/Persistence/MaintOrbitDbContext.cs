@@ -1,3 +1,4 @@
+using MaintOrbit.Domain.Modules.Auditing.ValueObjects;
 using MaintOrbit.Domain.Modules.Identity.Entities;
 using MaintOrbit.Domain.Modules.Identity.ValueObjects;
 using MaintOrbit.Shared.MultiTenancy;
@@ -84,6 +85,17 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
     public DbSet<EmployeeRole> EmployeeRoles => Set<EmployeeRole>();
 
     /// <summary>
+    /// The append-only compliance record (§4.10).
+    /// </summary>
+    /// <remarks>
+    /// Exposed so the sink can stage a row. Nothing reads it through this property: the audit
+    /// query surface (AU-5, AU-6) is not built, and adding it here rather than on a separate read
+    /// contract would put search behind the same type that guarantees immutability.
+    /// </remarks>
+    public DbSet<Domain.Modules.Auditing.Entities.AuditEvent> AuditEvents =>
+        Set<Domain.Modules.Auditing.Entities.AuditEvent>();
+
+    /// <summary>
     /// Registers value-object conversions before the model is discovered.
     /// </summary>
     /// <remarks>
@@ -96,6 +108,9 @@ public sealed class MaintOrbitDbContext(DbContextOptions<MaintOrbitDbContext> op
         ArgumentNullException.ThrowIfNull(configurationBuilder);
 
         base.ConfigureConventions(configurationBuilder);
+
+        configurationBuilder.Properties<AuditEventId>()
+            .HaveConversion<ValueObjectConverters.AuditEventIdConverter>();
 
         configurationBuilder.Properties<EmployeeId>()
             .HaveConversion<ValueObjectConverters.EmployeeIdConverter>();

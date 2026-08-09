@@ -17,4 +17,7 @@ internal static class Schemas
 {
     /// <summary>Employees, credentials, sessions, roles, permissions, Platform API Keys.</summary>
     public const string Identity = "identity";
+
+    /// <summary>Audit Events and legal holds.</summary>
+    public const string Auditing = "auditing";
 }

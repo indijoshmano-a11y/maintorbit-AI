@@ -3,6 +3,7 @@
 **Status:** Phase 11 complete (milestones 11.1–11.24), verified 2026-08-08.
 **Documentation reconciled:** Milestone 12.1 — §2's defects are resolved; §5 classifies every
 Phase 11 assumption.
+**Audit store built:** Milestone 12.2 — I-1 is closed; D-4 is closed; new deferred work in §1.
 **Scope:** the `identity` module only. Nothing here describes work that was attempted and failed;
 everything is work deliberately not started, or a documentation defect found while building.
 
@@ -19,7 +20,7 @@ article.
 
 | # | Deferred | What stands in its place | Consequence if forgotten |
 | --- | --- | --- | --- |
-| **I-1** | The **`auditing` module** — `audit_events` table, RLS policy, append-only enforcement (AU-1), search and export (AU-5, AU-6, AU-9), retention (AU-7), legal holds | `LoggingAuditSink` writes events to the log. It is named as a placeholder, not a store | **Highest-consequence item here.** Audit events are emitted correctly and go nowhere durable. ADR-0011's immutability guarantee is currently unmet — there is no append-only relation to enforce it on |
+| ~~**I-1**~~ | ~~The **`auditing` module** — `audit_events` table, RLS policy, append-only enforcement~~ | — | ✅ **Closed by 12.2.** `auditing.audit_events` exists: partitioned monthly, tenant-scoped, `REVOKE UPDATE, DELETE`, no update or delete path in code. `LoggingAuditSink` was **removed**, not kept as a fallback. The remaining audit gaps are I-9 … I-11 below |
 | **I-2** | **Email delivery** for password reset and email verification | `UndeliveredPasswordResetNotifier` / `UndeliveredEmailVerificationNotifier` log the gap rather than sending | Both flows are complete and correct server-side but cannot reach an Employee. Verification gates account activation (FR-AUTH-013), so this blocks real onboarding |
 | **I-3** | The **ADR-0012 CQRS dispatcher** and its nine ordered behaviours | Handlers are registered one per use case against `ICommandHandler`/`IQueryHandler` and invoked directly from endpoints | Audit emission, validation, and transaction boundaries are each implemented per-handler. §3.3 warns this makes coverage "a function of developer discipline" — `AuditEmissionTests` is the deliberate stand-in for the pipeline's guarantee (see D-4 below) |
 | **I-4** | The **ADR-0013 transactional outbox** | Handlers call `SaveChangesAsync` directly; audit emission is fail-open per ADR-0021 | An audit event can be lost if the sink fails after the transaction commits. This is classified fail-open deliberately, and every loss is logged as an AU-8 incident (EventId 1600) — but it is not the at-least-once delivery the outbox would give |
@@ -27,6 +28,10 @@ article.
 | **I-6** | **OAuth2 / SSO** | Nothing. `Authentication/OAuth2/` is an empty directory | As above |
 | **I-7** | **Rate limiting** on authentication endpoints | Failed-login counting and account lockout (11.18) bound per-account guessing | Lockout bounds attempts against *one* account. It does nothing against spraying one password across many accounts, which is the attack it most resembles |
 | **I-8** | **Per-Company data keys** (SD-012 `dek_version` is on the row already) | `DeploymentDataKeyStore` returns one deployment-wide key for every Company | The envelope scheme and the version column are correct and ready. Only the key *source* is deployment-wide, so a per-Company key rotation is a store swap, not a schema change |
+| **I-9** 🔴 | **Partition management** — creation ahead of need, drop at retention expiry (§9.2, AU-7) | The 12.2 migration creates one month behind through twelve ahead, once | **The most time-sensitive item in this register.** T-5: a missing partition is an outage of the ingestion path, and because emission is fail-open it presents as AU-8 incidents and *lost audit events*, not as a failed request. The runway is finite and starts counting from the migration |
+| **I-10** | **Audit search and export** — AU-5, AU-6, AU-9, with keyset pagination (DD-13) | Nothing. Rows are written and indexed for these queries; no read surface exists | The audit trail is a product feature (P-06 buys the platform partly for it), and a store nobody can query does not deliver it. The indexes are already the ones those queries need |
+| **I-11** | **Legal holds** (`legal_holds`, FR-GOV-011) | Nothing | A hold suspends automated deletion within its scope. With no retention job yet there is nothing to suspend, so this is correctly ordered after I-9 |
+| **I-12** | The **durable stream and batch writer** (§3.3), and `stream_entry_id` | Emission writes synchronously, straight through, after the audited operation commits | The column and its unique index exist and are null on every row. Until the stream exists there is no redelivery to deduplicate — and no buffer between a write burst and the database |
 
 ---
 
@@ -42,7 +47,7 @@ resolution column records what happened to each.
 | **D-1** | `06-database` §3.3 | `employees.company_id → companies.id` marked "same schema". `companies` belongs to `tenancy`, so this is a cross-module foreign key — which §3.3 itself, and CLAUDE.md §9, forbid. Implemented without the FK | ✅ **12.1** — row corrected to "identifier only", with a note recording that the code was always right |
 | **D-2** | `04-technology` §8 | Named `Microsoft.AspNetCore.Cryptography.KeyDerivation` (PBKDF2 only) for password hashing, contradicting SD-010's Argon2id. Implemented per SD-010 | ✅ **12.1** — replaced with `Konscious.Security.Cryptography.Argon2` 1.3.1 |
 | **D-3** | `05-security/04-tenant-security` §3.4 | The cross-Company access path table omits authentication, which is itself a cross-Company read — an Employee's email must be resolved before their tenant is known | ✅ **12.1** — added as **path 13**, naming `ICredentialDirectory`'s four lookups as the complete enumeration |
-| **D-4** | `05-security/12-audit-and-compliance` §3.3 | Assigns audit emission to pipeline position 8 of a pipeline that does not exist (see I-3), and defines no vocabulary of audit action names | ⚠️ **12.1, partial** — an implementation-status block now marks the whole design as target-not-build. **The action vocabulary remains undocumented** (see §6) |
+| **D-4** | `05-security/12-audit-and-compliance` §3.3 | Assigns audit emission to pipeline position 8 of a pipeline that does not exist (see I-3), and defines no vocabulary of audit action names | ✅ **Closed by 12.2.** §3.4 now ratifies the thirteen actions, five targets, three outcomes and three actor types, with their form and the reason they live in Shared. The pipeline half remains marked target-not-build |
 | **D-5** | `06-database` §4.2 | **Three tables had no definition at all**: `password_reset_tokens`, `email_verification_tokens`, `company_authentication_policies` | ✅ **12.1** — all three defined from the verified schema |
 | **D-6** | `06-database` §4.2 | **Six tables described in prose with no column definition**: `mfa_enrollments`, `mfa_recovery_codes`, `permissions`, `role_definitions`, `role_permissions`, `employee_roles` | ✅ **12.1** — all six given definitions; the three reference tables gained an explanation of why they carry no RLS |
 
@@ -74,6 +79,7 @@ Found during 11.24's end-to-end verification. Neither is a defect in delivered b
 | --- | --- | --- |
 | **V-1** | **Three empty test projects** | `MaintOrbit.TestUtilities`, `MaintOrbit.Application.UnitTests` and `MaintOrbit.Infrastructure.IntegrationTests` contain zero `.cs` files. They restore, build, and appear in package listings, but run no tests. All Application and Infrastructure behaviour is currently covered through `MaintOrbit.Api.FunctionalTests` instead — a level higher than `08-development/testing-strategy.md` names for it. The coverage is real; its location is not what the strategy describes |
 | **V-2** | **`xunit` 2.9.3 is deprecated** | Marked `Legacy`, superseded by `xunit.v3`. Test projects only — no production dependency. No vulnerable packages exist anywhere in the solution |
+| **V-3** | **Successful sign-ins were recorded with no Company or actor** | Found and fixed in 12.2. `SignInCommandHandler` used the ambient audit overload, which reads `ICurrentIdentity` — empty during an anonymous login request — so the event carried a null Company and an `Anonymous` actor. Invisible while the sink wrote to a log; a real defect the moment events became tenant-scoped, because the row belongs to no tenant and the Company could never see its own sign-ins. The failure path had always built its event explicitly; the success path now does too |
 
 ---
 
@@ -168,4 +174,16 @@ Recorded so a later reader knows what "Phase 11 complete" was allowed to mean.
 - **Tests** — 928 across three assemblies, all passing.
 
 Re-verified in Milestone 12.1 against the same procedure, plus a package vulnerability check
-(none) and the two new documentation-drift rules. Test count is now 933.
+(none) and the two new documentation-drift rules. Test count was then 933.
+
+Re-verified again in Milestone 12.2, which added `auditing.audit_events`:
+
+- **The audit store's own security properties**, all asserted as a `NOSUPERUSER NOBYPASSRLS` role,
+  because a superuser bypasses row-level security unconditionally and would make every one of them
+  pass vacuously. A Company sees only its own events; an unset tenant sees none, through the parent
+  or through a partition addressed directly; a Company cannot write an event belonging to another,
+  nor an untenanted one; `UPDATE` and `DELETE` are refused with `permission denied`; `INSERT`
+  still works.
+- **Mutation-verified**: removing the `REVOKE`, widening the read policy to `USING (true)`, and
+  disabling credential redaction each failed exactly the tests that name those properties.
+- Test count is now **1,028**.

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Document | Logical Database Design |
-| Version | 1.1 — reconciled against the built schema (Milestone 12.1) |
+| Version | 1.2 — `audit_events` built (Milestone 12.2) |
 | Status | Draft — **blocked on four decisions; see §10.3** |
 | Owner | Engineering |
-| Last updated | 2026-08-08 |
+| Last updated | 2026-08-09 |
 | Audience | Engineering, Security, Architecture Review |
 | Phase | 6 — Database Design |
 
@@ -878,6 +878,44 @@ a retention period is a compliance-relevant act, potentially an attempt to destr
 
 **Tamper-evidence (v1.1, NFR-COMP-003)** will add a hash-chain column. Designing the row layout
 now with that addition in mind avoids a disruptive change later.
+
+> **Built in Milestone 12.2.** The table above is implemented as specified, with three points worth
+> recording because they resolve ambiguities the specification left open.
+>
+> **`company_id` is nullable.** A sign-in attempt against an address matching no Employee belongs
+> to no tenant — the Company is the *result* of the lookup, not an input to it (§3.4 path 13 of
+> `05-security/04-tenant-security.md`). Those attempts are among the most security-relevant records
+> the platform keeps, so refusing to store them was the wrong trade. Such rows are invisible to
+> every tenant, because `company_id = NULL` is `NULL` rather than true.
+>
+> **`ux_audit_events_stream_entry_id` carries `occurred_at_utc`.** DD-6 specifies the column unique;
+> DD-12 requires the table partitioned; PostgreSQL refuses a unique index on a partitioned table
+> that omits the partition key, so the two decisions cannot both be honoured literally. Including
+> the partition key preserves DD-6's intent — a redelivered stream entry replays the same event at
+> the same instant, so the duplicate is still refused. What is given up is only the ability to
+> reject the same stream entry id bearing a *different* timestamp, which would not be a redelivery.
+> The column is null on every row today: §3.3's durable stream is not built, so nothing has a
+> stream entry to record.
+>
+> **Two policies, not one.** `rls_audit_events_read` covers `SELECT` with the usual tenant
+> predicate. `rls_audit_events_append` covers `INSERT` and uses `IS NOT DISTINCT FROM` rather than
+> `=`, which is what makes the untenanted platform event writable at all — `=` is `NULL` when either
+> side is, so a policy written that way would refuse every failed sign-in before a tenant is known.
+> There is deliberately **no `UPDATE` or `DELETE` policy**: under `FORCE`, a command with no policy
+> matches nothing, which is the first of the two append-only mechanisms. The second is DD-11's
+> `REVOKE`, which fails loudly instead of silently reporting zero rows affected.
+>
+> Row-level security is enabled and forced on the parent **and on every partition**. Parent policies
+> apply when rows are reached through the parent, which is how the application works — but a
+> partition addressed directly answers to its own, and without them "every tenant-scoped relation
+> carries a policy" would be true of the parent and false of the relations actually holding rows.
+>
+> **Partition management is not built.** The migration creates one month behind through twelve
+> ahead. §9.2's scheduled job belongs to the Worker, which does not exist; T-5's "a missing
+> partition is an outage" is therefore a live operational risk rather than a theoretical one, and
+> because audit emission is fail-open it would present as lost events rather than failed requests.
+> No `DEFAULT` partition exists, deliberately — it would convert that outage into silent misfiling,
+> and rows landing in it then block creation of the real partition covering their range.
 
 ### `legal_holds` — C2
 

@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Document | Audit and Compliance |
-| Version | 1.1 — implementation status recorded (Milestone 12.1) |
+| Version | 1.2 — audit store built; action vocabulary ratified (Milestone 12.2) |
 | Status | Draft — SD-018 requires legal confirmation |
 | Owner | Security, Compliance & Engineering |
-| Last updated | 2026-08-08 |
+| Last updated | 2026-08-09 |
 | Audience | Security, Compliance, Legal, Engineering, Leadership |
 | Phase | 5 — Security Architecture |
 
@@ -102,7 +102,7 @@ developer discipline and FR-AUD-001 would not hold. Audit sits at pipeline posit
 and therefore implements audit emission directly. A shared test suite must assert that both
 paths produce equivalent audit outcomes, or they will drift (ADR-0010 R-3).
 
-> ### Implementation status as of Phase 11 — this section describes the target, not the build
+> ### Implementation status as of Milestone 12.2 — this section describes the target, not the build
 >
 > The design above is unchanged and remains the frozen decision. What exists today is less than it,
 > and the gap is recorded here so nobody reads this section as a description of the running system.
@@ -110,23 +110,30 @@ paths produce equivalent audit outcomes, or they will drift (ADR-0010 R-3).
 > | Element | Status |
 > | --- | --- |
 > | The ADR-0012 pipeline, and audit at **position 8** | **Not built.** No dispatcher exists; handlers are invoked directly from endpoints |
-> | Stream → batch writer → **append-only store** | **Not built.** The `auditing` module and `audit_events` do not exist. `LoggingAuditSink` writes to the log and is named as a placeholder |
-> | Reconciliation job | **Not built** |
-> | Emission itself | **Built.** `identity` emits sign-in, sign-out, lockout, MFA enrolment and challenge, role assignment, session revocation, and every authorization denial, through an `IAuditTrail` seam that fills actor, Company, correlation, and time |
+> | Durable stream → batch writer | **Not built.** Emission writes straight through to the store, synchronously, in its own transaction after the audited operation commits |
+> | **Append-only store** | **Built (12.2).** `auditing.audit_events` — partitioned monthly, tenant-scoped by row-level security, `REVOKE UPDATE, DELETE` |
+> | Reconciliation job | **Not built.** It reconciles stream offsets against persisted counts, and there is no stream |
+> | Emission itself | **Built.** `identity` emits sign-in, sign-out, lockout, MFA enrolment and challenge, role assignment, session revocation, and every authorization denial |
 >
 > **Because the pipeline does not exist, `identity` emits directly — the same shape this section
 > already sanctions for the Gateway hot path.** That inherits the warning two paragraphs up:
 > coverage becomes a function of developer discipline. `AuditEmissionTests` is the deliberate
-> substitute, asserting through real HTTP that each documented event is emitted with the right
-> action, outcome, actor, and target. It is the coverage guarantee until position 8 exists.
+> substitute, asserting through real HTTP that each documented event is emitted; `AuditPersistenceTests`
+> then asserts the same events reach the table. It is the coverage guarantee until position 8 exists.
 >
-> **Five guarantees in §3.2 are consequently unmet**, all for the same reason — there is no store:
-> **AU-1** (append-only — vacuously true today, since there is no relation to modify, but not
-> *enforced*), **AU-5** (searchable), **AU-6** (exportable), **AU-7** (retention), and **AU-9**
-> (searchable within 30 seconds). Legal holds have no home either. **AU-2, AU-3, AU-4 and AU-8 are
-> met** by the emission side as built. ADR-0011's immutability guarantee is a commitment the schema
-> has not yet been asked to keep. See
-> [I-1 and I-3](../08-development/identity-foundation-deferred-work.md).
+> **Where §3.2's guarantees now stand.** AU-1 is enforced rather than vacuous: no update or delete
+> path exists in code, and the grant is revoked at the database. AU-2, AU-3, AU-4 and AU-8 are met
+> by the emission side. **AU-5, AU-6 and AU-9 remain unmet** — the rows exist and are indexed for
+> those queries, but no search or export surface is built. **AU-7 is partly met**: retention is a
+> partition drop (DB-P5) and the partitions exist, but nothing creates them ahead of need or drops
+> them at expiry. AU-10 (tamper-evidence) is v1.1. Legal holds still have no home.
+>
+> **Two operational gaps follow from the missing Worker**, and both are recorded in
+> [the deferred-work register](../08-development/identity-foundation-deferred-work.md):
+> partitions exist for a fixed window from the migration forward, and §9.2's "created ahead of need
+> by a scheduled job" has no job — T-5 states the consequence, that a missing partition is an outage
+> of the ingestion path. Because emission is fail-open, that outage would present as AU-8 incidents
+> and lost events rather than as a failed request.
 
 ### 3.4 What is audited
 
@@ -147,6 +154,49 @@ paths produce equivalent audit outcomes, or they will drift (ADR-0010 R-3).
 **Authorization denials are a primary detection signal.** A burst from one identity is a
 privilege-escalation attempt in progress — which is why every denial is recorded rather
 than only successes.
+
+#### The action and target vocabulary
+
+§3.4 above says *what categories* are audited. It did not, until Milestone 12.2, say what an
+individual event is *called* — so Phase 11 invented names and centralised them pending this
+section. These are those names, ratified.
+
+**Form: `category.verb`, lower case, hyphenated.** Stored as text rather than an enumeration
+because the trail is exported to customers (AU-6) and read by auditors (AU-5); a column of integers
+would make the export depend on a lookup table nobody ships with it.
+
+| Action | Emitted when | Outcomes |
+| --- | --- | --- |
+| `authentication.sign-in` | A sign-in is attempted | Success · Failure |
+| `authentication.sign-out` | A session is ended by its holder | Success |
+| `authentication.sign-out-all` | Every session for an Employee is ended | Success |
+| `authentication.lockout` | Failed attempts reach the Company's threshold | Success |
+| `authentication.mfa.enrol` | Second-factor enrolment begins | Success |
+| `authentication.mfa.confirm` | Enrolment is proved and activated | Success · Failure |
+| `authentication.mfa.challenge` | A second factor is presented | Success · Failure |
+| `authentication.mfa.disable` | The second factor is turned off | Success · Failure |
+| `session.revoke` | One session is terminated | Success |
+| `session.revoke-others` | Every session except the caller's is terminated | Success |
+| `employee.role.assign` | A role is granted | Success |
+| `employee.role.remove` | A role is withdrawn | Success |
+| `authorization.denied` | A permission check refuses a request (FR-PERM-004) | Denied |
+
+**Targets**: `employee`, `session`, `mfa-enrollment`, `role-assignment`, `endpoint`.
+
+**Outcomes**: `Success`, `Failure`, `Denied` — closed by a check constraint, as are actor types
+(`Anonymous`, `Employee`, `System`).
+
+The constants live in `MaintOrbit.Shared.Auditing`, not in the `auditing` module, and that is a
+boundary decision rather than a convenience: `identity` emits against this vocabulary and must not
+reference another module's internals (ADR-0002 R-5). A published contract in Shared is the only
+place both sides can see.
+
+**`context` carries no credential material.** The audit store is the one relation with no delete
+path, so a value written into it cannot be removed by any code the system has. Keys naming
+credentials — password, token, secret, hash, key, cookie, signature, and the rest — are redacted
+before the row is constructed, and values are capped so a request body or completion cannot become
+a payload (AU-4). The guard is in the aggregate's factory, not at each emission point, because a
+convention applied at thirteen call sites holds until somebody adds the fourteenth.
 
 ### 3.5 Security events — a distinguished subset
 

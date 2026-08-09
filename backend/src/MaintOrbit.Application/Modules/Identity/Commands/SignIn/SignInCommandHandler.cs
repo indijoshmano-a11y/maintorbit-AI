@@ -135,18 +135,33 @@ public sealed class SignInCommandHandler(
         // session authenticates nothing.
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        // Built explicitly rather than through the ambient overload, for the same reason the
+        // failure path below is: sign-in is an anonymous request, so there is no validated identity
+        // for the trail to read. The identity exists here — it was just established — but only as a
+        // local, and the ambient accessor is still empty.
+        //
+        // Using the ambient overload recorded a successful sign-in with no Company and an Anonymous
+        // actor. That was invisible while the sink wrote to a log, and became a real defect the
+        // moment events were persisted and tenant-scoped: the row belongs to no tenant, so the
+        // Company can never see its own sign-ins — the records FR-AUTH-014 exists to give them.
         await audit.RecordAsync(
-            AuditActions.SignIn,
-            AuditOutcome.Success,
-            AuditTargets.Session,
-            session.Id.ToString(),
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                // The client type and device label are the Employee's own descriptive fields, not
-                // content (AU-4) — they are what makes a device list readable afterwards.
-                ["clientType"] = command.ClientType.ToString(),
-                ["employeeId"] = identity.EmployeeId.ToString()
-            },
+            new AuditEvent(
+                now,
+                AuditActions.SignIn,
+                AuditOutcome.Success,
+                AuditActorType.Employee,
+                identity.CompanyId.Value,
+                identity.EmployeeId.Value,
+                AuditTargets.Session,
+                session.Id.ToString(),
+                CorrelationId: null,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    // The client type is the Employee's own descriptive field, not content (AU-4) —
+                    // it is what makes a device list readable afterwards.
+                    ["clientType"] = command.ClientType.ToString(),
+                    ["employeeId"] = identity.EmployeeId.ToString()
+                }),
             cancellationToken).ConfigureAwait(false);
 
         return Result.Success(new SignInResult(accessToken, issued.Token, session.Id));

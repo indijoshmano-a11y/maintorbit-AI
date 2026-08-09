@@ -95,7 +95,7 @@ public sealed class DbContextRegistrationTests
     }
 
     [Fact]
-    public void Model_ExposesOnlyTheIdentityAggregatesBuiltSoFar()
+    public void Model_ExposesOnlyTheAggregatesBuiltSoFar()
     {
         // Updated deliberately in 11.1, which is what the previous "model is empty" assertion
         // existed to force. Every entity is named, so the next one added updates this too.
@@ -105,6 +105,8 @@ public sealed class DbContextRegistrationTests
 
         Assert.Equal(
             [
+                // The auditing module's only aggregate, added in 12.2.
+                "MaintOrbit.Domain.Modules.Auditing.Entities.AuditEvent",
                 "MaintOrbit.Domain.Modules.Identity.Entities.CompanyAuthenticationPolicy",
                 "MaintOrbit.Domain.Modules.Identity.Entities.EmailVerificationToken",
                 "MaintOrbit.Domain.Modules.Identity.Entities.Employee",

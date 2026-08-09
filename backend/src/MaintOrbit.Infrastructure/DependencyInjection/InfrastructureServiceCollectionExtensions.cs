@@ -8,7 +8,9 @@ using MaintOrbit.Domain.Modules.Identity.Repositories;
 using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
 using MaintOrbit.Application.Abstractions.Notifications;
+using MaintOrbit.Domain.Modules.Auditing.Repositories;
 using MaintOrbit.Infrastructure.Auditing;
+using MaintOrbit.Infrastructure.Persistence.Repositories.Auditing;
 using MaintOrbit.Infrastructure.Caching;
 using MaintOrbit.Infrastructure.Cryptography;
 using MaintOrbit.Infrastructure.MultiTenancy;
@@ -215,16 +217,24 @@ public static class InfrastructureServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers audit emission (FR-AUTH-014, FR-PERM-004).
+    /// Registers audit emission and the append-only store (FR-AUTH-014, FR-PERM-004, AU-1).
     /// </summary>
     /// <remarks>
-    /// Scoped, because the trail reads the request's identity and correlation identifier. The sink
-    /// is the seam the <c>auditing</c> module replaces; what is registered today writes to the
-    /// structured log and is named so nobody mistakes it for the append-only store.
+    /// All scoped. The trail reads the request's identity and correlation identifier; the sink and
+    /// repository share the request's <c>DbContext</c>, and therefore its tenant session — which
+    /// is what lets the row-level security policy check the row being written rather than trusting
+    /// the writer.
+    /// <para>
+    /// <b>One sink, registered against one destination.</b> <c>LoggingAuditSink</c> was removed
+    /// rather than kept as a fallback: §3.1 warns that audit events written as log entries inherit
+    /// log sampling and retention, so a second destination would be a second store answering the
+    /// same question with weaker guarantees.
+    /// </para>
     /// </remarks>
     private static void AddAuditing(IServiceCollection services)
     {
-        services.TryAddSingleton<IAuditSink, LoggingAuditSink>();
+        services.TryAddScoped<IAuditEventRepository, AuditEventRepository>();
+        services.TryAddScoped<IAuditSink, PersistentAuditSink>();
         services.TryAddScoped<IAuditTrail, AuditTrail>();
     }
 

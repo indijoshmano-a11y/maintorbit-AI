@@ -137,7 +137,7 @@ public sealed class EmployeeCredentialMappingTests
 
         var migrations = context.Database.GetMigrations().ToList();
 
-        Assert.Equal(9, migrations.Count);
+        Assert.Equal(10, migrations.Count);
         Assert.Contains(migrations, m => m.EndsWith("EmployeeCredentials", StringComparison.Ordinal));
     }
 
@@ -186,12 +186,19 @@ public sealed class EmployeeCredentialMappingTests
         var policy = Script();
         var occurrences = policy.Split(TenantSession.CurrentCompanyExpression).Length - 1;
 
-        // Ten tenant-scoped tables, each with USING and WITH CHECK: employees,
+        // Ten identity tables, each with USING and WITH CHECK: employees,
         // employee_credentials, sessions, refresh_tokens, employee_roles,
         // password_reset_tokens, mfa_enrollments, mfa_recovery_codes,
         // company_authentication_policies, and email_verification_tokens. Every one of them is a
         // policy that would silently return zero rows if its predicate drifted from what sets the
         // variable.
-        Assert.Equal(20, occurrences);
+        //
+        // Plus two on auditing.audit_events, which splits the pair across separate policies —
+        // USING for SELECT, WITH CHECK for INSERT, and none at all for UPDATE or DELETE. That
+        // asymmetry is the append-only guarantee, so the count is 22 rather than 24.
+        //
+        // The per-partition policies are created inside a DO block by dynamic SQL, so the literal
+        // does not appear once per partition in the script.
+        Assert.Equal(22, occurrences);
     }
 }
