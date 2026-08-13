@@ -128,9 +128,38 @@ a monolith.
 | R-5 | A job omits tenant context and processes nothing, misdiagnosed as a data problem | Medium | High | Explicit establishment is a job-authoring requirement; documented failure signature |
 | R-6 | Throughput ceiling reached as request volume grows | Medium | Medium | Queue depth alerting; broker migration path per §9 |
 
+## 8.1 Implementation status as of Milestone 12.3
+
+**The Worker host exists; Hangfire does not.**
+
+`MaintOrbit.Worker` was created in Milestone 12.3 as a separate executable and container, exactly
+as this ADR and DP-001 require — same solution, same libraries, distinct entry point. Everything in
+§3 about host separation is implemented.
+
+**The job framework is not.** The Worker runs one job — audit partition maintenance — as a
+`BackgroundService` with a `PeriodicTimer`. That is a deliberate deviation, recorded here rather
+than left to be discovered:
+
+| This ADR chose | 12.3 built | Why |
+| --- | --- | --- |
+| Hangfire, PostgreSQL storage | A timer in a hosted service | One job, whose retry is "run again tomorrow" and whose idempotency is structural. Hangfire's value — queues, scheduling, retry, dashboard — is worth its cost at the nine job classes in §1, not at one |
+| At-least-once with framework retry | The next cycle is the retry | No aggressive retry is documented anywhere; ADR-0014 specifies *idempotency*, which is implemented and tested |
+| Named queues per job class | No queues | There is one job class. Queue partitioning protects ingestion from analytics, and neither exists |
+
+Two further reasons this was not the moment to adopt it. **TD-3 is open** — whether Hangfire's
+LGPL v3 obligations are acceptable for a redistributed product is unconfirmed, and CLAUDE.md §6
+rule 10 says not to build on an open decision. And adding a job framework's schema to the database
+is a migration that would be awkward to reverse if TD-3 resolves against it.
+
+**Revisit at the second job class.** The maintenance sits behind
+`IAuditPartitionMaintenance`, so scheduling it through Hangfire later changes the Worker's
+composition root and nothing else. Recorded as I-13 in the deferred-work register.
+
 ## 9. Future Revisions
 
 Revisit when:
+
+- **A second job class is introduced** — the trigger for adopting Hangfire itself, per §8.1.
 
 - **Ingestion throughput approaches Hangfire's practical ceiling** on PostgreSQL storage —
   the signal is batch writer lag pushing usage freshness past 45 seconds (75% of

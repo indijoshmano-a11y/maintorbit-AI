@@ -888,6 +888,16 @@ now with that addition in mind avoids a disruptive change later.
 > the platform keeps, so refusing to store them was the wrong trade. Such rows are invisible to
 > every tenant, because `company_id = NULL` is `NULL` rather than true.
 >
+> **Boundaries are anchored to UTC, and once were not.** The 12.2 migration computed months as
+> `date` values and passed them through `%L`, producing a `timestamp without time zone` literal —
+> which PostgreSQL interprets in the *server's* timezone when assigned to a `timestamptz` partition
+> key. On a server at `+05:30`, `audit_events_2026_07` actually spanned 30 June 18:30Z to 31 July
+> 18:30Z, so an event at 31 July 20:00Z was stored in the partition named for *August*. Retention
+> drops whole partitions by name, so the error would have destroyed part of one month while
+> preserving part of another. Corrected by `AuditPartitionBoundsUtc` (12.3), which refuses to run
+> if any partition holds rows rather than rebuilding over live audit history. §1.7's "UTC
+> throughout" exists for exactly this.
+>
 > **`ux_audit_events_stream_entry_id` carries `occurred_at_utc`.** DD-6 specifies the column unique;
 > DD-12 requires the table partitioned; PostgreSQL refuses a unique index on a partitioned table
 > that omits the partition key, so the two decisions cannot both be honoured literally. Including
@@ -910,12 +920,28 @@ now with that addition in mind avoids a disruptive change later.
 > partition addressed directly answers to its own, and without them "every tenant-scoped relation
 > carries a policy" would be true of the parent and false of the relations actually holding rows.
 >
-> **Partition management is not built.** The migration creates one month behind through twelve
-> ahead. §9.2's scheduled job belongs to the Worker, which does not exist; T-5's "a missing
-> partition is an outage" is therefore a live operational risk rather than a theoretical one, and
-> because audit emission is fail-open it would present as lost events rather than failed requests.
-> No `DEFAULT` partition exists, deliberately — it would convert that outage into silent misfiling,
-> and rows landing in it then block creation of the real partition covering their range.
+> **Partition management is built (Milestone 12.3).** `MaintOrbit.Worker` runs a daily maintenance
+> cycle that reads the catalogue, creates every missing month out to a configurable horizon
+> (default twelve), and reports partitions past retention. It is idempotent and serialised across
+> Worker replicas by a PostgreSQL advisory lock. No `DEFAULT` partition is ever created — it would
+> convert a missing-partition outage into silent misfiling, and rows landing in it then block
+> creation of the real partition covering their range.
+>
+> **Dropping expired partitions is implemented but disabled by default**, and that is a blocker
+> rather than a preference: a partition may hold events under a legal hold, `legal_holds` is
+> specified in §4.10 and unimplemented, and with no way to ask whether a hold applies an automated
+> drop could destroy the evidence a hold exists to preserve. Retention is evaluated every cycle and
+> eligible partitions are reported, so an operator can see exactly what would be removed.
+>
+> **A partition whose name or bounds do not match the scheme is reported and left alone.** It is
+> never repaired, recreated, or dropped automatically — a relation under `audit_events` that the
+> job does not recognise may hold evidence.
+>
+> **Partition DDL requires ownership of `auditing.audit_events`.** In the current deployment shape
+> the migration role and the application role are the same, so the Worker's role already has it. A
+> deployment separating them must grant the Worker's role ownership of the parent table, or run
+> maintenance as the migration role; the application role must **not** be given DDL rights to make
+> this work.
 
 ### `legal_holds` — C2
 

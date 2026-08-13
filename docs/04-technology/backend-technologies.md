@@ -84,7 +84,7 @@ added ([`dependency-policy.md`](dependency-policy.md)).
 | Package | Purpose | Version | Licence | Risk | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `Microsoft.AspNetCore.App` *(shared framework)* | Web framework, hosting, routing, DI | Runtime major | MIT | 🟢 | Framework reference, not a package reference |
-| `Microsoft.Extensions.Hosting` | Worker host generic hosting | Runtime major | MIT | 🟢 | Worker entry point |
+| `Microsoft.Extensions.Hosting` | Worker host generic hosting | 10.0.10 | MIT | 🟢 | The Worker entry point, referenced since Milestone 12.3. A console process, not a web host, so it takes this directly rather than through the ASP.NET Core shared framework |
 | `Microsoft.AspNetCore.SignalR.StackExchangeRedis` | SignalR backplane | Runtime major | MIT | 🟢 | [ADR-0015](../03-adr/ADR-0015-signalr.md) |
 | `Microsoft.AspNetCore.OpenApi` | OpenAPI document generation | Runtime major | MIT | 🟢 | Specification must stay in sync — FR-API-012 |
 | `Microsoft.AspNetCore.Authentication.JwtBearer` | Bearer token validation | Runtime major | MIT | 🟢 | [ADR-0007](../03-adr/ADR-0007-authentication-strategy.md) |

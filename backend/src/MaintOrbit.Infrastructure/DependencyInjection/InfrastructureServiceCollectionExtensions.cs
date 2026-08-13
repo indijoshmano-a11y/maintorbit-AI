@@ -9,7 +9,9 @@ using MaintOrbit.Infrastructure.Persistence.Repositories.Identity;
 using MaintOrbit.Infrastructure.Authentication;
 using MaintOrbit.Application.Abstractions.Notifications;
 using MaintOrbit.Domain.Modules.Auditing.Repositories;
+using MaintOrbit.Application.Abstractions.Maintenance;
 using MaintOrbit.Infrastructure.Auditing;
+using MaintOrbit.Infrastructure.Maintenance;
 using MaintOrbit.Infrastructure.Persistence.Repositories.Auditing;
 using MaintOrbit.Infrastructure.Caching;
 using MaintOrbit.Infrastructure.Cryptography;
@@ -72,6 +74,50 @@ public static class InfrastructureServiceCollectionExtensions
         AddEmailVerification(services, configuration);
         AddEncryption(services, configuration);
         AddMfa(services, configuration);
+        AddAuditPartitionMaintenance(services, configuration);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers only what a maintenance host needs: the clock, persistence settings, and audit
+    /// partition maintenance.
+    /// </summary>
+    /// <remarks>
+    /// <b>A deliberately narrow root, for a least-privilege reason rather than a tidiness one.</b>
+    /// <see cref="AddInfrastructure"/> registers authentication, encryption, and the permission
+    /// cache, each with <c>ValidateOnStart</c> — so a Worker composing it would refuse to start
+    /// without a JWT signing key and an encryption data key. Both are C4 material, and the Worker
+    /// has no use for either: it creates partitions.
+    /// <para>
+    /// Supplying them anyway would put the platform's token signing key into a second process, a
+    /// second container image's environment, and a second secret store, to satisfy a validator for
+    /// a feature that process does not have. P-4 — "least privilege, including our own" — is the
+    /// reason this method exists rather than the Worker being handed the full set.
+    /// </para>
+    /// <para>
+    /// It does <b>not</b> register <c>MaintOrbitDbContext</c>. Partition maintenance is DDL under a
+    /// session-scoped advisory lock, so it opens its own connection; EF has no expression for the
+    /// statements involved, and the context's tenant interceptor exists to serve requests the
+    /// Worker does not have.
+    /// </para>
+    /// </remarks>
+    public static IServiceCollection AddInfrastructureMaintenance(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        AddClock(services);
+
+        services.AddOptions<PersistenceOptions>()
+            .Bind(configuration.GetSection(PersistenceOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<IValidateOptions<PersistenceOptions>, PersistenceOptionsValidator>();
+
+        AddAuditPartitionMaintenance(services, configuration);
 
         return services;
     }
@@ -236,6 +282,36 @@ public static class InfrastructureServiceCollectionExtensions
         services.TryAddScoped<IAuditEventRepository, AuditEventRepository>();
         services.TryAddScoped<IAuditSink, PersistentAuditSink>();
         services.TryAddScoped<IAuditTrail, AuditTrail>();
+    }
+
+    /// <summary>
+    /// Registers audit partition maintenance (§9.2).
+    /// </summary>
+    /// <remarks>
+    /// Registered by the shared infrastructure root so the settings are validated wherever the
+    /// layer is composed, but only the Worker schedules it — §9.2 puts partition creation in a
+    /// scheduled job, and DP-001 puts scheduled jobs in their own process so batch work cannot
+    /// compete with the API's latency budget.
+    /// <para>
+    /// Singleton: it holds no per-request state and opens its own connection, because the operation
+    /// is DDL under a session-scoped advisory lock rather than a query in somebody's tenant scope.
+    /// </para>
+    /// </remarks>
+    private static void AddAuditPartitionMaintenance(
+        IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<AuditPartitionOptions>()
+            .Bind(configuration.GetSection(AuditPartitionOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // AddSingleton, not TryAddSingleton: ValidateDataAnnotations has already registered an
+        // IValidateOptions<AuditPartitionOptions>, and TryAdd would see the service type as present
+        // and silently do nothing — leaving the retention floor unenforced.
+        services.AddSingleton<IValidateOptions<AuditPartitionOptions>,
+            AuditPartitionOptionsValidator>();
+
+        services.TryAddSingleton<IAuditPartitionMaintenance, AuditPartitionMaintenance>();
     }
 
     /// <summary>

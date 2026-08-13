@@ -98,7 +98,20 @@ flowchart TB
 | Image | Base | Responsibility |
 | --- | --- | --- |
 | `maintorbit-api` | .NET 9 runtime, non-root | Gateway hot path, management surface, SignalR hubs |
-| `maintorbit-worker` | .NET 9 runtime, non-root | Hangfire server; batch persistence, projections, scheduled jobs |
+| `maintorbit-worker` | .NET 10 runtime, non-root | Scheduled jobs. **As of Milestone 12.3 it runs one**: audit partition maintenance, on a timer rather than Hangfire (ADR-0014 §8.1). Batch persistence and projections arrive with the modules that need them |
+
+> **The Worker's database role needs ownership of `auditing.audit_events`.** Partition maintenance
+> is DDL — `CREATE TABLE ... PARTITION OF`, and `DROP TABLE` where retention is enabled — which
+> PostgreSQL permits only to the table's owner. In the current shape the migration role and the
+> application role are the same, so this already holds.
+>
+> **A deployment that separates them must provision it explicitly**: grant the Worker's role
+> ownership of the parent table, or run maintenance as the migration role. It must **not** be
+> solved by giving the application role DDL rights — that role is deliberately constrained, and
+> `REVOKE UPDATE, DELETE` on the audit store is part of what makes the append-only guarantee real.
+>
+> The Worker also reads its **own** `Persistence:ConnectionString`. Sharing the API's would put
+> batch work in the pool NFR-PERF-001 protects for the latency budget.
 | `maintorbit-web` | Node runtime, non-root | Next.js server |
 | `maintorbit-nginx` | Nginx, non-root | TLS termination, routing, static assets, connection limits |
 | `migration-runner` | .NET 9 SDK-trimmed | Schema migration; runs to completion before rollout |

@@ -15,6 +15,7 @@ public sealed class LayerDependencyTests
     private const string Application = "MaintOrbit.Application";
     private const string Infrastructure = "MaintOrbit.Infrastructure";
     private const string Api = "MaintOrbit.Api";
+    private const string Worker = "MaintOrbit.Worker";
     private const string Shared = "MaintOrbit.Shared";
 
     /// <summary>What each layer is permitted to reference. Anything absent is a violation.</summary>
@@ -24,7 +25,12 @@ public sealed class LayerDependencyTests
         [Domain] = [Shared],
         [Application] = [Domain, Shared],
         [Infrastructure] = [Application, Domain, Shared],
-        [Api] = [Application, Infrastructure, Shared]
+        [Api] = [Application, Infrastructure, Shared],
+
+        // The Worker is a host, exactly like the Api and alongside it — not above or below it.
+        // ADR-0014 puts it this way: "the same libraries as the API host; a distinct entry point,
+        // not a distinct solution". It composes the same inner layers and adds scheduled work.
+        [Worker] = [Application, Infrastructure, Shared]
     };
 
     [Fact]
@@ -86,6 +92,46 @@ public sealed class LayerDependencyTests
             .ToList();
 
         Assert.Empty(referencingApi);
+    }
+
+    [Fact]
+    public void NothingReferencesTheWorker()
+    {
+        // The Worker is a host, so it is a leaf. Domain and Application must not know it exists —
+        // and neither must the Api: the two hosts are siblings, and a reference either way would
+        // make DP-001's separate containers a fiction, because one image could not be built
+        // without the other's code.
+        var referencingWorker = BackendLayout.SourceProjects
+            .Where(project => project.Name != Worker)
+            .Where(project => project.ProjectReferences.Contains(Worker, StringComparer.Ordinal))
+            .Select(static project => project.Name)
+            .ToList();
+
+        Assert.Empty(referencingWorker);
+    }
+
+    [Fact]
+    public void TheWorker_DoesNotReferenceTheApi()
+    {
+        // Stated separately from the rule above because it is the one somebody would actually be
+        // tempted by: the Api holds the composition root, the health checks, and the pipeline, and
+        // reaching for them from the Worker would look like reuse. It would also put ASP.NET Core
+        // into a process that serves no traffic, which is the coupling AD-010 and DP-001 exist to
+        // prevent.
+        var worker = BackendLayout.Project(Worker);
+
+        Assert.DoesNotContain(Api, worker.ProjectReferences, StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void TheWorker_IsAnExecutable()
+    {
+        // DP-001 requires a separate container, which requires a separate entry point. A Worker
+        // that had quietly become a library would still compile, still pass every other rule here,
+        // and produce nothing to deploy.
+        var worker = BackendLayout.Project(Worker);
+
+        Assert.Contains("<OutputType>Exe</OutputType>", worker.Text, StringComparison.Ordinal);
     }
 
     [Fact]

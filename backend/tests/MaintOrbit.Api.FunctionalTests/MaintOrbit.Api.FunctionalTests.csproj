@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MaintOrbit.Api\MaintOrbit.Api.csproj" />
+    <ProjectReference Include="..\..\src\MaintOrbit.Worker\MaintOrbit.Worker.csproj" />
     <ProjectReference Include="..\MaintOrbit.TestUtilities\MaintOrbit.TestUtilities.csproj" />
   </ItemGroup>
 

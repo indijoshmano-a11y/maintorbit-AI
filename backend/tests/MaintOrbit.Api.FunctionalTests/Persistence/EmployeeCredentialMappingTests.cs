@@ -137,7 +137,7 @@ public sealed class EmployeeCredentialMappingTests
 
         var migrations = context.Database.GetMigrations().ToList();
 
-        Assert.Equal(10, migrations.Count);
+        Assert.Equal(11, migrations.Count);
         Assert.Contains(migrations, m => m.EndsWith("EmployeeCredentials", StringComparison.Ordinal));
     }
 

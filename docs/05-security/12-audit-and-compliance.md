@@ -124,16 +124,25 @@ paths produce equivalent audit outcomes, or they will drift (ADR-0010 R-3).
 > **Where §3.2's guarantees now stand.** AU-1 is enforced rather than vacuous: no update or delete
 > path exists in code, and the grant is revoked at the database. AU-2, AU-3, AU-4 and AU-8 are met
 > by the emission side. **AU-5, AU-6 and AU-9 remain unmet** — the rows exist and are indexed for
-> those queries, but no search or export surface is built. **AU-7 is partly met**: retention is a
-> partition drop (DB-P5) and the partitions exist, but nothing creates them ahead of need or drops
-> them at expiry. AU-10 (tamper-evidence) is v1.1. Legal holds still have no home.
+> those queries, but no search or export surface is built. AU-10 (tamper-evidence) is v1.1.
 >
-> **Two operational gaps follow from the missing Worker**, and both are recorded in
-> [the deferred-work register](../08-development/identity-foundation-deferred-work.md):
-> partitions exist for a fixed window from the migration forward, and §9.2's "created ahead of need
-> by a scheduled job" has no job — T-5 states the consequence, that a missing partition is an outage
-> of the ingestion path. Because emission is fail-open, that outage would present as AU-8 incidents
-> and lost events rather than as a failed request.
+> **AU-7 as of Milestone 12.3.** Retention is configurable, with a documented floor of twelve
+> months enforced at startup — a shorter setting stops the Worker rather than silently reducing a
+> compliance commitment. Retention is evaluated on every maintenance cycle and eligible partitions
+> are reported. **Dropping them is disabled by default and blocked on legal holds**: a partition
+> may hold events under a hold, `legal_holds` is specified and unimplemented, and destroying
+> evidence a hold exists to preserve is the one failure this control must not have. Enabling the
+> drop is a deliberate operator action taken after confirming no hold applies. The second half of
+> AU-7 — "retention changes are themselves audited" — is not implemented, because retention is
+> deployment configuration rather than an audited operation; that becomes an audit event when
+> retention becomes a per-Company setting.
+>
+> **Partition creation is built.** `MaintOrbit.Worker` (DP-001, its own container) runs a daily
+> cycle that creates every missing month to a configurable horizon, serialised across replicas by
+> a PostgreSQL advisory lock. T-5's "a missing partition is an outage of the ingestion path" is
+> therefore bounded rather than open-ended — and because emission is fail-open, that outage would
+> present as AU-8 incidents and lost events rather than a failed request, which is why the Worker
+> reports a failed cycle as its readiness signal.
 
 ### 3.4 What is audited
 
