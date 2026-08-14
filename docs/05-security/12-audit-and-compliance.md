@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Document | Audit and Compliance |
-| Version | 1.2 — audit store built; action vocabulary ratified (Milestone 12.2) |
+| Version | 1.3 — search and export built (Milestone 12.4) |
 | Status | Draft — SD-018 requires legal confirmation |
 | Owner | Security, Compliance & Engineering |
-| Last updated | 2026-08-09 |
+| Last updated | 2026-08-14 |
 | Audience | Security, Compliance, Legal, Engineering, Leadership |
 | Phase | 5 — Security Architecture |
 
@@ -123,8 +123,31 @@ paths produce equivalent audit outcomes, or they will drift (ADR-0010 R-3).
 >
 > **Where §3.2's guarantees now stand.** AU-1 is enforced rather than vacuous: no update or delete
 > path exists in code, and the grant is revoked at the database. AU-2, AU-3, AU-4 and AU-8 are met
-> by the emission side. **AU-5, AU-6 and AU-9 remain unmet** — the rows exist and are indexed for
-> those queries, but no search or export surface is built. AU-10 (tamper-evidence) is v1.1.
+> by the emission side.
+>
+> **AU-5 and AU-6 are met as of Milestone 12.4.** `GET /api/v1/audit-events` searches by actor,
+> action, target, outcome, correlation identifier, and time range — structured filtering only, per
+> §3.15 — with keyset pagination on `(occurred_at_utc, id)` (DD-13, §5.4), a 90-day maximum range
+> and a 200-row maximum page (§5.5). `GET /api/v1/audit-events/export` streams the same
+> representation as JSON. Both require `audit.read` and are isolated by row-level security on the
+> caller's own tenant-scoped connection; neither accepts a Company from the request.
+>
+> **AU-9 is met in the sense that matters and unproven in one respect.** Events are queryable the
+> moment they are committed — emission writes synchronously, so there is no ingestion lag to close
+> — and a first page returns in well under a second at 60,000 rows. What has not been measured is
+> the 30-second guarantee under production write load, which needs the durable stream (I-12) that
+> §3.3 assumes and a load test that does not yet exist.
+>
+> AU-10 (tamper-evidence) is v1.1.
+>
+> **Export carries three open decisions**, implemented as the supported portion rather than
+> invented: the *format* is unspecified by FR-AUD-006 ("a documented machine-readable format"), so
+> export reuses the JSON representation search already returns; §5.5's "asynchronous above a
+> threshold" names no threshold and no mechanism, so export is synchronous, streamed, and bounded,
+> and a caller who exceeds the bound is told to narrow the range; and `audit.export` is an
+> **implementation assumption** — AC-i requires export to be audited, nothing names the action, and
+> it follows the `category.verb` form §3.4 ratified. **FR-API-009 — the public audit API for
+> external security tooling — remains v1.1 and is not this.**
 >
 > **AU-7 as of Milestone 12.3.** Retention is configurable, with a documented floor of twelve
 > months enforced at startup — a shorter setting stops the Worker rather than silently reducing a

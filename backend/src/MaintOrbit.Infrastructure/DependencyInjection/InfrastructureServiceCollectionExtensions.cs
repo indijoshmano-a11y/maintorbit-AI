@@ -1,4 +1,5 @@
 using MaintOrbit.Application.Abstractions.Auditing;
+using MaintOrbit.Application.Modules.Auditing.Queries;
 using MaintOrbit.Application.Abstractions.Authorization;
 using MaintOrbit.Application.Abstractions.Persistence;
 using MaintOrbit.Infrastructure.Authorization;
@@ -280,6 +281,11 @@ public static class InfrastructureServiceCollectionExtensions
     private static void AddAuditing(IServiceCollection services)
     {
         services.TryAddScoped<IAuditEventRepository, AuditEventRepository>();
+
+        // Scoped, sharing the request's DbContext and therefore its tenant session — which is what
+        // makes row-level security the isolation control for audit reads rather than an
+        // application-side filter.
+        services.TryAddScoped<IAuditEventReader, AuditEventReader>();
         services.TryAddScoped<IAuditSink, PersistentAuditSink>();
         services.TryAddScoped<IAuditTrail, AuditTrail>();
     }

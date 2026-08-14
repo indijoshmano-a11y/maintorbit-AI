@@ -17,8 +17,15 @@ namespace MaintOrbit.ArchitectureTests;
 /// </remarks>
 public sealed class AuthorizationRuleTests
 {
-    /// <summary>The one file allowed to name a permission.</summary>
-    private const string Catalogue = "IdentityPermissions.cs";
+    /// <summary>The files allowed to name a permission — one catalogue per module.</summary>
+    /// <remarks>
+    /// A permission belongs to the module whose resource it governs, so the catalogue is per
+    /// module rather than global. The property this rule protects is unchanged: a code is written
+    /// once, so a misspelling is a compile error instead of a policy that silently denies
+    /// everybody. <c>NoCodeIsNamedTwice</c> keeps the catalogues from overlapping.
+    /// </remarks>
+    private static readonly string[] Catalogues =
+        ["IdentityPermissions.cs", "AuditPermissions.cs"];
 
     [Fact]
     public void PermissionCodesAreNamedInExactlyOnePlace()
@@ -30,13 +37,29 @@ public sealed class AuthorizationRuleTests
         // Concentrating the names means a typo is a compile error, and it also makes the answer to
         // "what does this deployment enforce?" a single file rather than a search.
         var offenders = BackendLayout.SourceFiles
-            .Where(static path => Path.GetFileName(path) != Catalogue)
+            .Where(static path => !Catalogues.Contains(Path.GetFileName(path), StringComparer.Ordinal))
             .Where(static path => File.ReadAllText(path).Contains(
                 "PermissionCode.Create(\"", StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToList();
 
         Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void NoPermissionCodeIsNamedTwice()
+    {
+        // The catalogues partition the permissions; they must not overlap. Two constants with the
+        // same value would let one be changed while callers of the other kept the old policy.
+        var codes = BackendLayout.SourceFiles
+            .Where(static path => Catalogues.Contains(Path.GetFileName(path), StringComparer.Ordinal))
+            .SelectMany(static path => System.Text.RegularExpressions.Regex
+                .Matches(File.ReadAllText(path), @"PermissionCode\.Create\(""(?<code>[^""]+)""\)")
+                .Select(match => match.Groups["code"].Value))
+            .ToList();
+
+        Assert.NotEmpty(codes);
+        Assert.Equal(codes.Count, codes.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

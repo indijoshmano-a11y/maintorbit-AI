@@ -12,6 +12,7 @@ using MaintOrbit.Application.Modules.Identity.Commands.SignIn;
 using MaintOrbit.Application.Modules.Identity.Commands.Sessions;
 using MaintOrbit.Application.Modules.Identity.Commands.SignOut;
 using MaintOrbit.Application.Modules.Identity.Queries.EmployeeRoles;
+using MaintOrbit.Application.Modules.Auditing.Queries;
 using MaintOrbit.Application.Modules.Identity.Queries.Employees;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -145,6 +146,10 @@ public static class ApplicationServiceCollectionExtensions
         services.TryAddScoped<
             IQueryHandler<GetCurrentSessionQuery, EmployeeSession>,
             GetCurrentSessionQueryHandler>();
+
+        services.TryAddScoped<
+            IQueryHandler<SearchAuditEventsQuery, AuditEventPage>,
+            SearchAuditEventsQueryHandler>();
 
         return services;
     }

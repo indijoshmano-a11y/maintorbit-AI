@@ -5,6 +5,7 @@
 Phase 11 assumption.
 **Audit store built:** Milestone 12.2 — I-1 is closed; D-4 is closed; new deferred work in §1.
 **Partition maintenance built:** Milestone 12.3 — I-9 is closed; the Worker foundation exists.
+**Search and export built:** Milestone 12.4 — I-10 is closed; AU-5 and AU-6 are met; D-13 is open.
 **Scope:** the `identity` module only. Nothing here describes work that was attempted and failed;
 everything is work deliberately not started, or a documentation defect found while building.
 
@@ -32,7 +33,7 @@ article.
 | **I-7** | **Rate limiting** on authentication endpoints | Failed-login counting and account lockout (11.18) bound per-account guessing | Lockout bounds attempts against *one* account. It does nothing against spraying one password across many accounts, which is the attack it most resembles |
 | **I-8** | **Per-Company data keys** (SD-012 `dek_version` is on the row already) | `DeploymentDataKeyStore` returns one deployment-wide key for every Company | The envelope scheme and the version column are correct and ready. Only the key *source* is deployment-wide, so a per-Company key rotation is a store swap, not a schema change |
 | ~~**I-9**~~ | ~~**Partition management** — creation ahead of need~~ | — | ✅ **Closed by 12.3.** `MaintOrbit.Worker` creates every missing month to a configurable horizon on a daily cycle, idempotent and serialised by a PostgreSQL advisory lock. **Dropping expired partitions is implemented but disabled by default — see I-11** |
-| **I-10** | **Audit search and export** — AU-5, AU-6, AU-9, with keyset pagination (DD-13) | Nothing. Rows are written and indexed for these queries; no read surface exists | The audit trail is a product feature (P-06 buys the platform partly for it), and a store nobody can query does not deliver it. The indexes are already the ones those queries need |
+| ~~**I-10**~~ | ~~**Audit search and export**~~ | — | ✅ **Closed by 12.4.** `GET /api/v1/audit-events` and `/export`, `audit.read`, keyset pagination, isolated by RLS on the tenant-scoped connection. **AU-5 and AU-6 met; AU-9 met for freshness but unmeasured under load** (needs I-12). Export's format, async threshold, and `audit.export` action remain open — see §2 D-13 |
 | **I-11** 🔴 | **Legal holds** (`legal_holds`, FR-GOV-011) | Nothing | **Now the blocker on automated retention.** 12.3 built the drop and left it off: a partition may hold events under a hold, and with no way to ask, an automated drop could destroy the evidence a hold exists to preserve. Storage grows until this exists or an operator enables dropping deliberately. The design in `06-database` §4.10 is one prose line — it needs specifying before it can be built |
 | **I-12** | The **durable stream and batch writer** (§3.3), and `stream_entry_id` | Emission writes synchronously, straight through, after the audited operation commits | The column and its unique index exist and are null on every row. Until the stream exists there is no redelivery to deduplicate — and no buffer between a write burst and the database |
 
@@ -63,6 +64,7 @@ Also corrected in 12.1, found during the same audit rather than during Phase 11:
 | **D-9** | `06-database` §4.2 | `refresh_tokens` omitted `company_id` and `expires_at_utc`; `sessions` listed no constraints | ✅ Completed |
 | **D-10** | `06-database` §4.2 | `federated_identities` and `platform_api_keys` documented as though they exist; no migration creates either | ✅ Moved under "Designed, not yet built", cross-referenced to I-5 and I-6 |
 | **D-11** | `04-technology` §8 | `Otp.NET` named for TOTP; no such package is referenced — RFC 6238 is implemented over the framework's `HMACSHA1` | ✅ Corrected, with the reasoning and the SHA-1 clarification |
+| **D-13** | `05-security/12-audit-and-compliance` §3.6, `api-specification` §5.5 | **Export has three unspecified decisions**, recorded rather than invented in 12.4: FR-AUD-006 requires "a documented machine-readable format" and no document names one; §5.5 says export is "asynchronous above a threshold" with no threshold and no mechanism; and AC-i requires export to be audited but names no action. Implemented as JSON reusing the search representation, synchronous and bounded, with `audit.export` as an assumption | ⚠️ **Open** — needs Product |
 | **D-12** | `04-technology` §4 | Seven referenced packages absent from the inventory, including `Microsoft.IdentityModel.JsonWebTokens` and the six `Microsoft.Extensions.*` abstractions that make ADR-0001's dependency rule expressible | ✅ Added |
 
 > **Recurrence prevention.** `DocumentationDriftTests` now enforces the two directions that failed

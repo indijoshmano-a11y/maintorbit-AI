@@ -124,6 +124,27 @@ public static class AuditActions
 
     /// <summary>An authorization denial (FR-PERM-004).</summary>
     public const string PermissionDenied = "authorization.denied";
+
+    /// <summary>
+    /// An audit export was performed.
+    /// </summary>
+    /// <remarks>
+    /// AC-i and §3.6 both require it — "export is itself an audited event, including actor, scope,
+    /// and destination" — because bulk data leaving is a security-relevant act, and §3.5 lists
+    /// export among the events an exfiltration investigation looks for.
+    /// <para>
+    /// <b>The name is new; the requirement is not.</b> Nothing documents what this action is
+    /// called, so it follows the <c>category.verb</c> form §3.4 ratified in 12.2 and the resource
+    /// name the permission already uses. Recorded as an assumption in the milestone report.
+    /// </para>
+    /// <para>
+    /// <b>Scope, not destination.</b> The context carries the filter that selected the rows and
+    /// how many were written. There is no destination to record: the export streams to the caller
+    /// over the same authenticated request, and the "destination" §3.6 anticipates belongs to
+    /// FR-AUD-009 continuous streaming, which is v1.1.
+    /// </para>
+    /// </remarks>
+    public const string AuditExported = "audit.export";
 }
 
 /// <summary>The target kinds this module names.</summary>
@@ -143,4 +164,7 @@ public static class AuditTargets
 
     /// <summary>An API endpoint, for a denial that never reached a resource.</summary>
     public const string Endpoint = "endpoint";
+
+    /// <summary>The audit trail itself, as the target of an export.</summary>
+    public const string AuditTrail = "audit-trail";
 }
